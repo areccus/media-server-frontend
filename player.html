@@ -1,0 +1,1221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Player</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap" rel="stylesheet">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <style>
+  </style>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    html, body {
+      width:100%; height:100%;
+      background:#06080c;
+      font-family:'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      color:#fff;
+      overflow:hidden;
+      user-select:none;
+      -webkit-user-select:none;
+    }
+
+    /* ── Wrapper ─────────────────────────────────────────────────────── */
+    #wrap {
+      position:relative;
+      width:100vw; height:100vh;
+    }
+    #wrap.hide-cursor { cursor:none; }
+
+    /* ── Video ────────────────────────────────────────────────────────── */
+    #vid {
+      width:100%; height:100%;
+      object-fit:contain;
+      display:block;
+    }
+
+    /* ── Shared overlay bar logic ─────────────────────────────────────── */
+    .bar {
+      position:absolute;
+      left:0; right:0;
+      z-index:30;
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .22s ease;
+    }
+    .bar.on {
+      opacity:1;
+      pointer-events:all;
+    }
+
+    /* ── Top bar ──────────────────────────────────────────────────────── */
+    #top {
+      top:0;
+      padding:18px 20px 40px;
+      background:linear-gradient(to bottom, rgba(6,8,12,.9) 0%, transparent 100%);
+      display:flex;
+      align-items:center;
+    }
+
+    #btn-exit {
+      display:flex;
+      align-items:center;
+      gap:7px;
+      padding:8px 16px 8px 12px;
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:8px;
+      color:rgba(255,255,255,.88);
+      font-family:inherit;
+      font-size:14px;
+      font-weight:500;
+      cursor:pointer;
+      transition:background .15s, border-color .15s;
+    }
+    #btn-exit:hover {
+      background:rgba(255,255,255,.11);
+      border-color:rgba(255,255,255,.18);
+    }
+
+    /* ── Bottom bar ───────────────────────────────────────────────────── */
+    #bot {
+      bottom:0;
+      padding:0 max(18px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left));
+      background:linear-gradient(to top, rgba(6,8,12,.92) 0%, transparent 100%);
+    }
+
+    /* ── Seek bar ─────────────────────────────────────────────────────── */
+    #seek-wrap {
+      position:relative;
+      height:22px;
+      display:flex;
+      align-items:center;
+      cursor:pointer;
+      margin-bottom:4px;
+    }
+    #seek-track {
+      position:absolute;
+      inset:0;
+      margin:auto;
+      height:3px;
+      background:rgba(255,255,255,.2);
+      border-radius:2px;
+      transition:height .12s;
+      overflow:visible;
+    }
+    #seek-wrap:hover #seek-track { height:5px; }
+    #seek-buf {
+      height:100%;
+      background:rgba(255,255,255,.18);
+      border-radius:2px;
+      width:0%;
+      pointer-events:none;
+    }
+    #seek-fill {
+      position:absolute;
+      top:0; left:0;
+      height:100%;
+      background:#5BB7FF;
+      border-radius:2px;
+      width:0%;
+      pointer-events:none;
+    }
+    #seek-thumb {
+      position:absolute;
+      top:50%;
+      width:13px; height:13px;
+      background:#fff;
+      border-radius:50%;
+      box-shadow:0 0 0 3px rgba(91,183,255,.35);
+      transform:translate(-50%,-50%) scale(0);
+      transition:transform .12s;
+      pointer-events:none;
+      z-index:2;
+    }
+    #seek-wrap:hover #seek-thumb { transform:translate(-50%,-50%) scale(1); }
+
+    /* ── Control row ──────────────────────────────────────────────────── */
+    #ctrl {
+      display:flex;
+      align-items:center;
+      gap:8px;
+      height:40px;
+    }
+    #ctrl-l { display:flex; align-items:center; gap:2px; flex-shrink:0; }
+    #ctrl-c {
+      flex:1;
+      min-width:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+    }
+    #ctrl-r { display:flex; align-items:center; gap:2px; flex-shrink:0; }
+
+    /* ── Mobile: trim controls to fit phone width ─────────────────────── */
+    @media (max-width: 600px) {
+      #bot { padding: 0 10px max(12px, env(safe-area-inset-bottom)) 10px; }
+      .ibtn { width:34px; height:34px; }
+      #vol-wrap { display:none; }   /* use system volume on mobile        */
+      #ctrl-c   { display:none; }   /* hide title — no room               */
+      #time     { font-size:11px; padding:0 2px; }
+    }
+
+    /* ── Icon buttons ─────────────────────────────────────────────────── */
+    .ibtn {
+      background:none;
+      border:none;
+      color:#fff;
+      cursor:pointer;
+      width:38px; height:38px;
+      border-radius:8px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      transition:background .15s, color .15s;
+      flex-shrink:0;
+    }
+    .ibtn:hover { background:rgba(255,255,255,.1); }
+    .ibtn:disabled { opacity:.3; cursor:default; pointer-events:none; }
+    .ibtn svg { display:block; pointer-events:none; }
+
+    /* ── Time display ─────────────────────────────────────────────────── */
+    #time {
+      font-size:12.5px;
+      color:rgba(255,255,255,.65);
+      white-space:nowrap;
+      font-variant-numeric:tabular-nums;
+      padding:0 4px;
+      letter-spacing:.01em;
+    }
+
+    /* ── Volume ───────────────────────────────────────────────────────── */
+    #vol-wrap {
+      display:flex;
+      align-items:center;
+      gap:2px;
+      overflow:hidden;
+    }
+    #vol-range {
+      width:0;
+      max-width:0;
+      height:3px;
+      accent-color:#5BB7FF;
+      cursor:pointer;
+      opacity:0;
+      transition:max-width .2s, opacity .2s, margin .2s;
+    }
+    #vol-wrap:hover #vol-range,
+    #vol-wrap:focus-within #vol-range {
+      width:64px;
+      max-width:64px;
+      opacity:1;
+      margin-right:4px;
+    }
+
+    /* ── Center title ─────────────────────────────────────────────────── */
+    #media-title {
+      font-size:14px;
+      font-weight:500;
+      color:rgba(255,255,255,.78);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:100%;
+      text-align:center;
+      letter-spacing:.01em;
+    }
+    #media-ep {
+      font-size:11.5px;
+      color:rgba(255,255,255,.38);
+      text-align:center;
+      margin-top:1px;
+      white-space:nowrap;
+    }
+
+    /* ── Quality menu ─────────────────────────────────────────────────── */
+    #source-wrap { position:relative; }
+    #source-menu {
+      position:absolute;
+      bottom:calc(100% + 10px);
+      right:0;
+      background:rgba(10,13,20,.96);
+      backdrop-filter:blur(24px);
+      -webkit-backdrop-filter:blur(24px);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:10px;
+      padding:6px;
+      min-width:150px;
+      display:none;
+      flex-direction:column;
+      gap:2px;
+      z-index:100;
+      box-shadow:0 8px 32px rgba(0,0,0,.5);
+    }
+    #source-menu.open { display:flex; }
+
+
+    .q-label {
+      font-size:10.5px;
+      font-weight:600;
+      color:rgba(255,255,255,.35);
+      text-transform:uppercase;
+      letter-spacing:.08em;
+      padding:4px 10px 6px;
+    }
+
+    .q-item {
+      background:none;
+      border:none;
+      color:rgba(255,255,255,.72);
+      font-family:inherit;
+      font-size:13px;
+      font-weight:500;
+      padding:7px 10px;
+      border-radius:6px;
+      cursor:pointer;
+      text-align:left;
+      transition:background .12s, color .12s;
+      white-space:nowrap;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    .q-item:hover { background:rgba(255,255,255,.08); color:#fff; }
+    .q-item.active { color:#5BB7FF; }
+    .q-item.active::before { content:''; display:block; width:5px; height:5px; background:#5BB7FF; border-radius:50%; flex-shrink:0; }
+    .q-item:not(.active)::before { content:''; display:block; width:5px; height:5px; flex-shrink:0; }
+
+    /* ── Click-flash (big play/pause icon) ───────────────────────────── */
+    #flash {
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      z-index:20;
+      pointer-events:none;
+    }
+    #flash-icon { opacity:0; transform:scale(.7); transition:none; }
+    #flash-icon.pop  { opacity:1; transform:scale(1); transition:opacity .08s, transform .08s; }
+    #flash-icon.fade { opacity:0; transform:scale(1.15); transition:opacity .35s .05s, transform .35s .05s; }
+
+    /* ── Buffering spinner ────────────────────────────────────────────── */
+    #buf {
+      position:absolute;
+      inset:0;
+      display:none;
+      place-items:center;
+      z-index:25;
+      pointer-events:none;
+    }
+    #buf.on { display:grid; }
+    .spin {
+      width:44px; height:44px;
+      border:2.5px solid rgba(255,255,255,.1);
+      border-top-color:rgba(255,255,255,.7);
+      border-radius:50%;
+      animation:spin .75s linear infinite;
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* ── Loading screen ───────────────────────────────────────────────── */
+    #loading {
+      position:absolute;
+      inset:0;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:18px;
+      background:#06080c;
+      z-index:50;
+    }
+    .spin-accent {
+      width:46px; height:46px;
+      border:2.5px solid rgba(91,183,255,.15);
+      border-top-color:#5BB7FF;
+      border-radius:50%;
+      animation:spin .8s linear infinite;
+    }
+    #load-msg  { font-size:15px; color:rgba(255,255,255,.65); font-weight:500; }
+    #load-sub  { font-size:12px; color:rgba(255,255,255,.28); }
+    #prog-wrap { width:180px; height:2px; background:rgba(255,255,255,.08); border-radius:1px; overflow:hidden; }
+    #prog-bar  { height:100%; background:#5BB7FF; border-radius:1px; width:0%; }
+
+    /* ── Error screen ─────────────────────────────────────────────────── */
+    #err {
+      position:absolute;
+      inset:0;
+      display:none;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:14px;
+      background:#06080c;
+      z-index:50;
+      text-align:center;
+      padding:32px;
+    }
+    #err-title  { font-size:20px; font-weight:600; }
+    #err-detail { font-size:13px; color:rgba(255,255,255,.4); max-width:380px; line-height:1.65; white-space:pre-line; }
+    .err-row    { display:flex; gap:10px; margin-top:6px; }
+    .ebtn {
+      padding:10px 22px;
+      border-radius:8px;
+      border:none;
+      font-family:inherit;
+      font-size:14px;
+      font-weight:500;
+      cursor:pointer;
+      transition:filter .15s;
+    }
+    .ebtn-p { background:#5BB7FF; color:#06080c; }
+    .ebtn-s { background:rgba(255,255,255,.08); color:#fff; border:1px solid rgba(255,255,255,.14); }
+    .ebtn:hover { filter:brightness(1.12); }
+
+    /* ── Embed exit overlay (lives outside #wrap, survives useEmbed()) ─── */
+    #embed-exit-overlay { display:none; }
+    #embed-exit-overlay.active { display:block; }
+
+    #embed-exit-zone {
+      position:fixed;
+      top:0; left:0; right:0;
+      height:16px;
+      z-index:900;
+      cursor:default;
+    }
+
+    #embed-exit-bar {
+      position:fixed;
+      top:0; left:0; right:0;
+      z-index:899;
+      padding:18px 20px 48px;
+      background:linear-gradient(to bottom, rgba(6,8,12,.94) 0%, transparent 100%);
+      display:flex;
+      align-items:center;
+      gap:14px;
+      transform:translateY(-100%);
+      transition:transform .22s ease, opacity .22s ease;
+      /* pointer-events always on — button must be clickable even when visually hidden */
+      pointer-events:all;
+      opacity:0;
+    }
+    #embed-exit-bar.on {
+      transform:translateY(0);
+      opacity:1;
+    }
+
+    #embed-exit-btn {
+      display:flex;
+      align-items:center;
+      gap:7px;
+      padding:8px 16px 8px 12px;
+      background:rgba(255,255,255,.06);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:8px;
+      color:rgba(255,255,255,.88);
+      font-family:inherit;
+      font-size:14px;
+      font-weight:500;
+      cursor:pointer;
+      transition:background .15s, border-color .15s;
+      flex-shrink:0;
+    }
+    #embed-exit-btn:hover {
+      background:rgba(255,255,255,.11);
+      border-color:rgba(255,255,255,.18);
+    }
+
+    #embed-exit-meta {
+      display:flex;
+      flex-direction:column;
+      gap:2px;
+      min-width:0;
+    }
+    #embed-exit-title-text {
+      font-size:14px;
+      font-weight:500;
+      color:rgba(255,255,255,.72);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    #embed-exit-notice {
+      font-size:11.5px;
+      color:rgba(255,255,255,.28);
+      white-space:nowrap;
+    }
+  </style>
+</head>
+<body>
+
+<div id="wrap">
+  <video id="vid" playsinline></video>
+
+  <!-- Buffering -->
+  <div id="buf"><div class="spin"></div></div>
+
+  <!-- Click feedback -->
+  <div id="flash">
+    <div id="flash-icon">
+      <svg viewBox="0 0 72 72" width="72" height="72">
+        <circle cx="36" cy="36" r="34" fill="rgba(0,0,0,.5)"/>
+        <g id="fi-play"  fill="white"><path d="M28 22v28l20-14z"/></g>
+        <g id="fi-pause" fill="white" style="display:none">
+          <rect x="22" y="20" width="9" height="32" rx="2"/>
+          <rect x="41" y="20" width="9" height="32" rx="2"/>
+        </g>
+      </svg>
+    </div>
+  </div>
+
+  <!-- ── Top bar ─────────────────────────────────────────────────────── -->
+  <div id="top" class="bar">
+    <button id="btn-exit" onclick="goBack()">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m15 6-6 6 6 6"/>
+      </svg>
+      Exit
+    </button>
+  </div>
+
+  <!-- ── Bottom bar ──────────────────────────────────────────────────── -->
+  <div id="bot" class="bar">
+
+    <!-- Seek -->
+    <div id="seek-wrap">
+      <div id="seek-track">
+        <div id="seek-buf"></div>
+        <div id="seek-fill"></div>
+      </div>
+      <div id="seek-thumb"></div>
+    </div>
+
+    <!-- Controls -->
+    <div id="ctrl">
+
+      <!-- Left: Play · Skip · Volume · Time -->
+      <div id="ctrl-l">
+        <button class="ibtn" id="btn-pp" onclick="togglePlay()">
+          <svg id="ic-play"  viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          <svg id="ic-pause" viewBox="0 0 24 24" width="22" height="22" fill="currentColor" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+        </button>
+
+        <!-- Rewind 10s -->
+        <button class="ibtn" onclick="skip(-10)" title="Rewind 10s (←)">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+            <text x="7.5" y="15.2" font-size="5" text-anchor="middle" font-family="sans-serif" font-weight="700">10</text>
+          </svg>
+        </button>
+
+        <!-- Forward 10s -->
+        <button class="ibtn" onclick="skip(10)" title="Forward 10s (→)">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M12.01 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z"/>
+            <text x="16.5" y="15.2" font-size="5" text-anchor="middle" font-family="sans-serif" font-weight="700">10</text>
+          </svg>
+        </button>
+
+        <!-- Volume -->
+        <div id="vol-wrap">
+          <button class="ibtn" id="btn-mute" onclick="toggleMute()">
+            <svg id="ic-vol"  viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>
+            <svg id="ic-mute" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="display:none"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z"/></svg>
+          </button>
+          <input id="vol-range" type="range" min="0" max="1" step="0.05" value="1">
+        </div>
+
+        <div id="time">0:00 / 0:00</div>
+      </div>
+
+      <!-- Center: Title -->
+      <div id="ctrl-c">
+        <div>
+          <div id="media-title"></div>
+          <div id="media-ep"></div>
+        </div>
+      </div>
+
+      <!-- Right: Prev ep · Next ep · Quality · Fullscreen -->
+      <div id="ctrl-r">
+
+        <!-- Previous episode (hidden for movies) -->
+        <button class="ibtn" id="btn-prev-ep" style="display:none" title="Previous episode">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M6 6h2v12H6zm3.5 6 8.5 6V6z"/>
+          </svg>
+        </button>
+
+        <!-- Next episode (hidden for movies) -->
+        <button class="ibtn" id="btn-next-ep" style="display:none" title="Next episode">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M6 18l8.5-6L6 6v12zm2.5-6 5.5 3.91V8.09L8.5 12zM16 6h2v12h-2z"/>
+          </svg>
+        </button>
+
+        <!-- Source selector -->
+        <div id="source-wrap">
+          <button class="ibtn" id="btn-source" title="Source" onclick="toggleSourceMenu()">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>
+          </button>
+          <div id="source-menu">
+            <div class="q-label">Source</div>
+            <button class="q-item active" id="src-debrid" onclick="selectSource('debrid')">Real-Debrid</button>
+            <button class="q-item" id="src-vidsrc" onclick="selectSource('vidsrc')">VidSrc Embed</button>
+          </div>
+        </div>
+
+
+        <!-- Fullscreen -->
+        <button class="ibtn" id="btn-fs" onclick="toggleFS()" title="Fullscreen (F)">
+          <svg id="ic-fs-on"  viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+          <svg id="ic-fs-off" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" style="display:none"><path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div><!-- /bot -->
+
+  <!-- Loading -->
+  <div id="loading">
+    <div class="spin-accent"></div>
+    <div id="load-msg">Extracting stream…</div>
+    <div id="prog-wrap"><div id="prog-bar"></div></div>
+    <div id="load-sub">First load takes ~15 s — cached after that</div>
+  </div>
+
+  <!-- Error -->
+  <div id="err">
+    <div id="err-title">Playback failed</div>
+    <div id="err-detail"></div>
+    <div class="err-row">
+      <button id="err-embed-btn" class="ebtn ebtn-p" onclick="useEmbed()">Try VidSrc Embed</button>
+      <button class="ebtn ebtn-s" onclick="goBack()">Go Back</button>
+    </div>
+    <div id="err-embed-note" style="display:none;color:#ff5c5c;font-size:0.82em;margin-top:10px;">With VidSrc we can't save your watch progress</div>
+  </div>
+
+</div><!-- /wrap -->
+
+<!-- Hidden captcha frame — loads cloudnestra rcp page through our proxy so the
+     browser auto-solves Turnstile and we capture the _rcp token server-side -->
+<iframe id="captcha-frame" style="position:fixed;bottom:0;right:0;width:300px;height:65px;
+  border:none;opacity:0;pointer-events:none;z-index:-1;" aria-hidden="true"></iframe>
+
+<!-- Persistent exit overlay — activated by useEmbed(), survives wrap.innerHTML swap -->
+<div id="embed-exit-overlay">
+  <div id="embed-exit-zone"></div>
+  <div id="embed-exit-bar">
+    <button id="embed-exit-btn" onclick="goBack()">
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="m15 6-6 6 6 6"/>
+      </svg>
+      Exit
+    </button>
+    <div id="embed-exit-meta">
+      <span id="embed-exit-title-text"></span>
+      <span id="embed-exit-notice">VidSrc embed · watch progress not saved</span>
+    </div>
+  </div>
+</div>
+
+<!-- HLS.js -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.13/dist/hls.min.js"></script>
+
+<script>
+// ── Params ────────────────────────────────────────────────────────────────
+const P         = new URLSearchParams(location.search);
+const mediaType = P.get('type');
+const mediaId   = P.get('id');
+const titleRaw  = P.get('title') || 'Video';
+const embedSrc  = P.get('src');
+const season    = parseInt(P.get('season'))        || 0;
+const episode   = parseInt(P.get('episode'))       || 0;
+const totalEps  = parseInt(P.get('totalEpisodes')) || 0;
+const imdbId    = P.get('imdbId')  || '';
+const tmdbId    = P.get('tmdbId')  || '';
+const poster    = P.get('poster')   || '';
+const backdrop  = P.get('backdrop') || '';
+const tone      = P.get('tone')     || '#5BB7FF';
+const profileId = parseInt(localStorage.getItem('currentProfileId') || '1');
+const isEp      = season > 0 && episode > 0;
+
+const vid  = document.getElementById('vid');
+const wrap = document.getElementById('wrap');
+
+// ── Title display ─────────────────────────────────────────────────────────
+document.getElementById('media-title').textContent = decodeURIComponent(titleRaw);
+if (isEp && totalEps > 0) {
+  document.getElementById('media-ep').textContent = `Episode ${episode} of ${totalEps}`;
+}
+
+// ── Backend detection ─────────────────────────────────────────────────────
+const HOST = location.hostname;
+let API = `http://${HOST}:5001/api`;
+
+async function detectBackend() {
+  for (const port of [5001, 5000]) {
+    try {
+      const r = await fetch(`http://${HOST}:${port}/api/health`, { signal: AbortSignal.timeout(2000) });
+      if (r.ok) { API = `http://${HOST}:${port}/api`; return; }
+    } catch (_) {}
+  }
+}
+
+// ── Controls auto-hide ─────────────────────────────────────────────────────
+const topBar = document.getElementById('top');
+const botBar = document.getElementById('bot');
+let hideT;
+
+function showCtrls() {
+  topBar.classList.add('on');
+  botBar.classList.add('on');
+  wrap.classList.remove('hide-cursor');
+  clearTimeout(hideT);
+  hideT = setTimeout(hideCtrls, 3200);
+}
+function hideCtrls() {
+  if (vid.paused) return;
+  topBar.classList.remove('on');
+  botBar.classList.remove('on');
+  wrap.classList.add('hide-cursor');
+}
+
+wrap.addEventListener('mousemove',  showCtrls);
+wrap.addEventListener('touchstart', showCtrls, { passive: true });
+showCtrls();
+
+// ── Episode navigation ─────────────────────────────────────────────────────
+if (isEp) {
+  const ref = imdbId || tmdbId;
+
+  function epURL(s, e) {
+    const ref2 = imdbId || tmdbId;
+    const k = imdbId ? 'imdb' : 'tmdb';
+    return `https://vidsrc-embed.ru/embed/tv?${k}=${ref2}&season=${s}&episode=${e}`;
+  }
+
+  function goEp(s, e) {
+    const newSrc   = epURL(s, e);
+    const newTitle = encodeURIComponent(decodeURIComponent(titleRaw).replace(/S\d+E\d+/, `S${s}E${e}`));
+    const idPart   = imdbId ? `imdbId=${imdbId}` : `tmdbId=${tmdbId}`;
+    location.href  =
+      `player.html?type=${mediaType}&id=${mediaId}&title=${newTitle}` +
+      `&src=${encodeURIComponent(newSrc)}&season=${s}&episode=${e}` +
+      `&totalEpisodes=${totalEps}&${idPart}`;
+  }
+
+  const btnPrev = document.getElementById('btn-prev-ep');
+  const btnNext = document.getElementById('btn-next-ep');
+
+  btnPrev.style.display = 'flex';
+  btnNext.style.display = 'flex';
+  if (episode <= 1)     btnPrev.disabled = true;
+  if (episode >= totalEps) btnNext.disabled = true;
+  btnPrev.onclick = () => goEp(season, episode - 1);
+  btnNext.onclick = () => goEp(season, episode + 1);
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────
+function goBack() {
+  window.location.href = `index.html#detail/${mediaType}/${mediaId}`;
+}
+
+// ── Seek ──────────────────────────────────────────────────────────────────
+const seekWrap  = document.getElementById('seek-wrap');
+const seekFill  = document.getElementById('seek-fill');
+const seekBuf   = document.getElementById('seek-buf');
+const seekThumb = document.getElementById('seek-thumb');
+let dragging = false;
+
+function pctFromEvent(e) {
+  const r = seekWrap.getBoundingClientRect();
+  const x = (e.touches ? e.touches[0].clientX : e.clientX);
+  return Math.max(0, Math.min(1, (x - r.left) / r.width));
+}
+function applySeek(pct) {
+  seekFill.style.width = `${pct * 100}%`;
+  seekThumb.style.left = `${pct * 100}%`;
+}
+function commitSeek(pct) {
+  if (vid.duration) vid.currentTime = pct * vid.duration;
+}
+
+seekWrap.addEventListener('mousedown', e => { dragging = true; commitSeek(pctFromEvent(e)); });
+document.addEventListener('mousemove',  e => { if (dragging) { applySeek(pctFromEvent(e)); commitSeek(pctFromEvent(e)); } });
+document.addEventListener('mouseup',    () => { dragging = false; });
+seekWrap.addEventListener('touchstart', e => { dragging = true; commitSeek(pctFromEvent(e)); }, { passive: true });
+document.addEventListener('touchmove',  e => { if (dragging) commitSeek(pctFromEvent(e)); }, { passive: true });
+document.addEventListener('touchend',   () => { dragging = false; });
+
+vid.addEventListener('progress', () => {
+  if (!vid.duration || !vid.buffered.length) return;
+  seekBuf.style.width = `${(vid.buffered.end(vid.buffered.length - 1) / vid.duration) * 100}%`;
+});
+
+const timeEl = document.getElementById('time');
+function fmt(s) {
+  if (!isFinite(s)) return '0:00';
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), ss = Math.floor(s % 60);
+  return h > 0
+    ? `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`
+    : `${m}:${String(ss).padStart(2,'0')}`;
+}
+vid.addEventListener('timeupdate', () => {
+  if (!dragging && vid.duration) {
+    applySeek(vid.currentTime / vid.duration);
+    timeEl.textContent = `${fmt(vid.currentTime)} / ${fmt(vid.duration)}`;
+  }
+
+  // Accumulate real watched seconds (ignore seeks: only count small forward steps)
+  if (isEp && !_episodeMarkedWatched && _lastVidTime >= 0 && !vid.paused) {
+    const delta = vid.currentTime - _lastVidTime;
+    if (delta > 0 && delta < 5) {   // >0 = forward, <5 = not a seek
+      _watchedAccum += delta;
+      if (_watchedAccum >= 300) markEpisodeWatched(); // 5 minutes
+    }
+  }
+  _lastVidTime = vid.currentTime;
+});
+
+// ── Play / Pause ───────────────────────────────────────────────────────────
+const icPlay  = document.getElementById('ic-play');
+const icPause = document.getElementById('ic-pause');
+const fiPlay  = document.getElementById('fi-play');
+const fiPause = document.getElementById('fi-pause');
+const flashEl = document.getElementById('flash-icon');
+
+function setPlayIcons(playing) {
+  icPlay.style.display  = playing ? 'none'  : 'block';
+  icPause.style.display = playing ? 'block' : 'none';
+}
+function togglePlay() {
+  vid.paused ? vid.play() : vid.pause();
+  flashFeedback(vid.paused);
+}
+function flashFeedback(willBePaused) {
+  fiPlay.style.display  = !willBePaused ? 'none' : 'block';
+  fiPause.style.display = !willBePaused ? 'block' : 'none';
+  flashEl.classList.remove('pop', 'fade');
+  void flashEl.offsetWidth;
+  flashEl.classList.add('pop');
+  setTimeout(() => { flashEl.classList.remove('pop'); flashEl.classList.add('fade'); }, 120);
+  setTimeout(() => flashEl.classList.remove('fade'), 500);
+}
+
+vid.addEventListener('play',  () => { setPlayIcons(true);  clearTimeout(hideT); hideT = setTimeout(hideCtrls, 2800); startAutoSave(); });
+vid.addEventListener('pause', () => { setPlayIcons(false); showCtrls(); saveProgress(); });
+vid.addEventListener('click', e => { e.stopPropagation(); togglePlay(); });
+
+function skip(secs) { vid.currentTime = Math.max(0, vid.currentTime + secs); }
+
+// ── Volume ────────────────────────────────────────────────────────────────
+const volRange = document.getElementById('vol-range');
+const icVol    = document.getElementById('ic-vol');
+const icMute   = document.getElementById('ic-mute');
+
+function syncVolIcons() {
+  const m = vid.muted || vid.volume === 0;
+  icVol.style.display  = m ? 'none'  : 'block';
+  icMute.style.display = m ? 'block' : 'none';
+}
+function toggleMute() { vid.muted = !vid.muted; syncVolIcons(); }
+volRange.addEventListener('input', () => {
+  vid.volume = parseFloat(volRange.value);
+  vid.muted = false;
+  syncVolIcons();
+});
+
+// ── Fullscreen ────────────────────────────────────────────────────────────
+const icFsOn  = document.getElementById('ic-fs-on');
+const icFsOff = document.getElementById('ic-fs-off');
+
+function toggleFS() {
+  document.fullscreenElement ? document.exitFullscreen() : wrap.requestFullscreen();
+}
+document.addEventListener('fullscreenchange', () => {
+  const fs = !!document.fullscreenElement;
+  icFsOn.style.display  = fs ? 'none'  : 'block';
+  icFsOff.style.display = fs ? 'block' : 'none';
+});
+
+// ── Buffering indicator ───────────────────────────────────────────────────
+const bufEl = document.getElementById('buf');
+vid.addEventListener('waiting', () => bufEl.classList.add('on'));
+vid.addEventListener('playing', () => bufEl.classList.remove('on'));
+vid.addEventListener('canplay', () => bufEl.classList.remove('on'));
+
+// ── Video error handler ───────────────────────────────────────────────────
+// Catches codec decode failures and unsupported formats (e.g. MKV on iOS Safari)
+vid.addEventListener('error', () => {
+  const e = vid.error;
+  const code = e ? e.code : 0;
+  const msgs = { 1: 'Load aborted', 2: 'Network error', 3: 'Decode error — codec may be unsupported on this device', 4: 'Format not supported on this device' };
+  const detail = msgs[code] || `Media error ${code}`;
+  if (activeHls) { activeHls.destroy(); activeHls = null; }
+  showError(`Playback failed: ${detail}\n\nTry the VidSrc embed as a fallback.`);
+});
+
+// ── Keyboard shortcuts ────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.code) {
+    case 'Escape':     showEmbedExit(); showCtrls(); break;
+    case 'Space': case 'KeyK': e.preventDefault(); togglePlay(); break;
+    case 'ArrowLeft':  e.preventDefault(); skip(-10); break;
+    case 'ArrowRight': e.preventDefault(); skip(10);  break;
+    case 'ArrowUp':    e.preventDefault(); vid.volume = Math.min(1, vid.volume + .1); volRange.value = vid.volume; syncVolIcons(); break;
+    case 'ArrowDown':  e.preventDefault(); vid.volume = Math.max(0, vid.volume - .1); volRange.value = vid.volume; syncVolIcons(); break;
+    case 'KeyM': toggleMute(); break;
+    case 'KeyF': toggleFS();   break;
+  }
+});
+
+// ── Quality menu ──────────────────────────────────────────────────────────
+let activeHls = null;
+let _cfHint = null;
+let _resumeAt = 0; // seconds to seek after video metadata loads
+
+// ── Episode watched tracking ───────────────────────────────────────────────
+// An episode counts as "watched" after 5 continuous minutes of real playback.
+// Works in both regular mode (timeupdate) and embed mode (wall-clock timer).
+let _episodeMarkedWatched = false;
+let _watchedAccum = 0;   // accumulated real seconds watched
+let _lastVidTime  = -1;  // vid.currentTime at previous timeupdate
+
+async function markEpisodeWatched() {
+  if (_episodeMarkedWatched || !isEp) return;
+  _episodeMarkedWatched = true;
+  try {
+    await fetch(`${API}/progress/episode-watched`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ profile_id: profileId, media_id: mediaId, season, episode }),
+    });
+    console.log(`Marked S${season}E${episode} as watched`);
+  } catch (_) {}
+}
+
+// Seek to resume point as soon as the video knows its duration
+vid.addEventListener('loadedmetadata', () => {
+  if (_resumeAt > 4) { vid.currentTime = _resumeAt; _resumeAt = 0; }
+});
+
+// Close source menu on outside click
+document.addEventListener('click', e => {
+  const sWrap = document.getElementById('source-wrap');
+  if (sWrap && !sWrap.contains(e.target)) {
+    document.getElementById('source-menu').classList.remove('open');
+  }
+});
+
+function toggleSourceMenu() {
+  document.getElementById('source-menu').classList.toggle('open');
+}
+
+let _currentSource = 'debrid';
+function selectSource(src) {
+  document.getElementById('source-menu').classList.remove('open');
+  if (src === _currentSource) return;
+  _currentSource = src;
+  document.getElementById('src-debrid').classList.toggle('active', src === 'debrid');
+  document.getElementById('src-vidsrc').classList.toggle('active', src === 'vidsrc');
+  if (src === 'vidsrc') {
+    useEmbed();
+  } else {
+    // Reload the page to re-extract via Real-Debrid
+    location.reload();
+  }
+}
+
+// ── Fake progress bar ─────────────────────────────────────────────────────
+const progBar = document.getElementById('prog-bar');
+let progT;
+function startFakeProgress() {
+  let pct = 0;
+  progT = setInterval(() => {
+    pct += pct < 50 ? 3.5 : pct < 80 ? 1.2 : 0.25;
+    if (pct > 90) { clearInterval(progT); return; }
+    progBar.style.width = `${pct}%`;
+  }, 500);
+}
+function finishProgress() {
+  clearInterval(progT);
+  progBar.style.transition = 'width .3s';
+  progBar.style.width = '100%';
+}
+
+// ── Embed exit overlay ────────────────────────────────────────────────────
+let _embedExitHideT;
+const _embedBar  = document.getElementById('embed-exit-bar');
+const _embedZone = document.getElementById('embed-exit-zone');
+
+function showEmbedExit() {
+  _embedBar.classList.add('on');
+  clearTimeout(_embedExitHideT);
+  _embedExitHideT = setTimeout(() => _embedBar.classList.remove('on'), 3200);
+}
+
+_embedZone.addEventListener('mouseenter', showEmbedExit);
+_embedBar.addEventListener('mouseenter',  () => clearTimeout(_embedExitHideT));
+_embedBar.addEventListener('mouseleave',  () => {
+  _embedExitHideT = setTimeout(() => _embedBar.classList.remove('on'), 1500);
+});
+
+// Show exit bar when the user clicks into the embed iframe (focus moves away from parent).
+// Do NOT re-steal focus — that breaks click-to-play inside the iframe.
+// The pulse interval handles re-showing the bar periodically instead.
+window.addEventListener('blur', () => {
+  if (document.getElementById('embed-exit-overlay').classList.contains('active')) {
+    setTimeout(showEmbedExit, 50);
+  }
+});
+
+// ── Error / Fallback ──────────────────────────────────────────────────────
+function showError(msg) {
+  clearInterval(progT);
+  document.getElementById('loading').style.display = 'none';
+  document.getElementById('err-detail').textContent = msg;
+  const canEmbed = !!(mediaType && mediaId && (mediaType === 'movie' || (season && episode)));
+  document.getElementById('err-embed-btn').style.display  = canEmbed ? '' : 'none';
+  document.getElementById('err-embed-note').style.display = canEmbed ? '' : 'none';
+  document.getElementById('err').style.display = 'flex';
+}
+
+function buildVidsrcEmbedUrl() {
+  const id = imdbId || tmdbId || mediaId;
+  const isImdb = !!(imdbId || mediaId.startsWith('tt'));
+  const idParam = isImdb ? `imdb=${id}` : `tmdb=${id}`;
+  if (mediaType !== 'movie' && season && episode) {
+    return `https://vidsrc-embed.ru/embed/tv?${idParam}&season=${season}&episode=${episode}`;
+  }
+  return `https://vidsrc-embed.ru/embed/movie?${idParam}`;
+}
+
+let _embedPulseInterval = null;
+function startEmbedPulse() {
+  clearInterval(_embedPulseInterval);
+  _embedPulseInterval = setInterval(() => {
+    if (!document.getElementById('embed-exit-overlay').classList.contains('active')) {
+      clearInterval(_embedPulseInterval); return;
+    }
+    if (!_embedBar.classList.contains('on')) showEmbedExit();
+  }, 8000);
+}
+
+function useEmbed() {
+  const src = embedSrc || buildVidsrcEmbedUrl();
+  if (!src) { goBack(); return; }
+  document.getElementById('err').style.display     = 'none';
+  document.getElementById('loading').style.display = 'none';
+
+  document.getElementById('embed-exit-title-text').textContent = decodeURIComponent(titleRaw);
+  document.getElementById('embed-exit-overlay').classList.add('active');
+  showEmbedExit();
+  startEmbedPulse();
+
+  // Embed mode: no access to video currentTime, so use wall-clock — if the
+  // embed stays open for 5 minutes the user almost certainly watched the episode
+  if (isEp && !_episodeMarkedWatched) {
+    setTimeout(() => {
+      if (document.getElementById('embed-exit-overlay').classList.contains('active')) {
+        markEpisodeWatched();
+      }
+    }, 5 * 60 * 1000);
+  }
+
+  // sandbox without allow-popups silently kills window.open ad popups.
+  // allow-scripts + allow-same-origin keeps the embed's own cookies/storage
+  // intact so its player initialises normally.
+  wrap.innerHTML = `
+    <iframe src="${src}"
+      style="width:100%;height:100%;border:none"
+      allowfullscreen allow="autoplay; fullscreen; encrypted-media; picture-in-picture"></iframe>
+  `;
+}
+
+// ── HLS.js / native loader ────────────────────────────────────────────────
+function loadStream(url, filename) {
+  clearTimeout(_cfHint);
+  finishProgress();
+  document.getElementById('loading').style.display = 'none';
+  showCtrls();
+
+  const isHLS = url.includes('.m3u8');
+  // Always proxy — fixes content-type, remuxes MKV→MP4 for iOS, rewrites m3u8 segments.
+  const proxyParams = new URLSearchParams({ url });
+  if (filename) proxyParams.set('filename', filename);
+  const srcUrl = `${API}/stream/proxy?${proxyParams}`;
+
+  if (isHLS && Hls.isSupported()) {
+    const hls = new Hls({
+      enableWorker: true,
+      backBufferLength: 90,
+      capLevelToPlayerSize: false,
+      abrEwmaDefaultEstimate: 10_000_000,
+    });
+    activeHls = hls;
+    hls.loadSource(srcUrl);
+    hls.attachMedia(vid);
+    hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
+      hls.currentLevel = data.levels.length - 1; // highest quality
+      vid.play().catch(() => {});
+    });
+    hls.on(Hls.Events.ERROR, (_, d) => {
+      if (d.fatal) {
+        console.error('HLS fatal:', d.type, d.details, d.response, d.url);
+        showError(`Stream error: ${d.details} (${d.type})\nURL: ${(d.url||'').slice(0,60)}`);
+      }
+    });
+  } else if (isHLS && vid.canPlayType('application/vnd.apple.mpegurl')) {
+    vid.src = srcUrl;
+    vid.play().catch(() => {});
+  } else if (!isHLS) {
+    // MKV streams are remuxed to MP4 by the proxy — just load the proxied URL.
+    vid.src = srcUrl;
+    vid.play().catch(() => {});
+  } else {
+    showError('HLS.js failed to load. Try the VidSrc embed instead.');
+  }
+}
+
+// ── Progress saving ───────────────────────────────────────────────────────
+async function saveProgress() {
+  if (!vid.duration || vid.duration < 1 || vid.currentTime < 2) return;
+  try {
+    await fetch(`${API}/progress/save`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        profile_id:   profileId,
+        media_id:     mediaId,
+        media_type:   mediaType,
+        title:        decodeURIComponent(titleRaw),
+        poster,
+        backdrop,
+        tone,
+        current_time: vid.currentTime,
+        duration:     vid.duration,
+        season:       season  || 0,
+        episode:      episode || 0,
+        quality:      activeHls ? (activeHls.levels[activeHls.currentLevel]?.height + 'p' || '1080p') : '1080p'
+      })
+    });
+  } catch (_) {}
+}
+
+let _saveInterval = null;
+function startAutoSave() {
+  if (_saveInterval) return;
+  _saveInterval = setInterval(saveProgress, 5000);
+}
+
+window.addEventListener('beforeunload', () => saveProgress());
+
+// ── Captcha relay ─────────────────────────────────────────────────────────
+// Loads the cloudnestra rcp page in a hidden iframe so the browser auto-solves
+// Turnstile, then retries extraction once the backend has the _rcp token cached.
+async function tryCaptchaRelay() {
+  if (!mediaType || !mediaId) return false;
+  try {
+    const qs = new URLSearchParams({ type: mediaType, id: mediaId });
+    if (isEp) { qs.set('season', season); qs.set('episode', episode); }
+    if (imdbId) qs.set('imdbId', imdbId);
+
+    const r = await fetch(`${API}/stream/captcha-url?${qs}`);
+    const d = await r.json();
+    if (!d.success || !d.rcp_url) return false;
+
+    // Proxy the rcp page — browser will auto-solve Turnstile (<1s typically)
+    const frame = document.getElementById('captcha-frame');
+    frame.src = `${API}/stream/captcha-frame?url=${encodeURIComponent(d.rcp_url)}`;
+
+    // Give Turnstile up to 4s to solve and the relay POST to complete
+    await new Promise(res => setTimeout(res, 4000));
+
+    // Retry extraction — backend now has _rcp in cache if solve succeeded
+    const qs2 = new URLSearchParams();
+    if (isEp) { qs2.set('season', season); qs2.set('episode', episode); }
+    if (imdbId) qs2.set('imdbId', imdbId);
+    const res2 = await fetch(`${API}/stream/${mediaType}/${mediaId}?${qs2}`);
+    const data2 = await res2.json();
+    if (data2.success && data2.data?.stream_url) {
+      console.log('Captcha relay succeeded — loading stream');
+      loadStream(data2.data.stream_url, data2.data.filename || '');
+      return true;
+    }
+  } catch (e) {
+    console.warn('captcha relay error:', e);
+  }
+  return false;
+}
+
+// ── Main init ─────────────────────────────────────────────────────────────
+async function init() {
+  if (!mediaType || !mediaId) { showError('Invalid media parameters.'); return; }
+
+  await detectBackend();
+  startFakeProgress();
+
+  document.getElementById('load-msg').textContent =
+    isEp ? `Extracting S${season}E${episode}…` : 'Extracting stream…';
+  document.getElementById('load-sub').textContent = 'May take up to 20 seconds';
+
+  // If extraction is taking long a visible browser window may have opened for a
+  // security check — update the message so the user knows what to do.
+  _cfHint = setTimeout(() => {
+    if (document.getElementById('loading').style.display === 'none') return;
+    document.getElementById('load-msg').textContent = 'Security check in progress…';
+    document.getElementById('load-sub').textContent =
+      'A browser window opened on your screen — complete the check to continue';
+  }, 25000);
+
+  try {
+    const qs = new URLSearchParams();
+    if (isEp) { qs.set('season', season); qs.set('episode', episode); }
+    if (imdbId) qs.set('imdbId', imdbId);
+
+    // Fetch stream URL and saved progress in parallel — progress is a fast DB lookup
+    // and will be done long before the 15 s stream extraction completes
+    const [res, savedProgress] = await Promise.all([
+      fetch(`${API}/stream/${mediaType}/${mediaId}?${qs}`),
+      fetch(`${API}/progress/${mediaType}/${mediaId}?profile_id=${profileId}`)
+        .then(r => r.json())
+        .catch(() => null),
+    ]);
+    const data = await res.json();
+
+    if (!data.success || !data.data?.stream_url) {
+      throw new Error(data.error || 'No stream URL returned');
+    }
+
+    console.log(`Stream source: ${data.data.source} — ${data.data.stream_url.slice(0,80)}…`);
+
+    loadStream(data.data.stream_url, data.data.filename || '');
+
+    // Resume from saved position if this is the same episode we left off on
+    if (savedProgress?.success && savedProgress.data) {
+      const p = savedProgress.data;
+      const sameEp = !isEp || (p.season === season && p.episode === episode);
+      if (sameEp && p.current_time > 4 && p.progress < 0.95) {
+        _resumeAt = p.current_time;
+        console.log(`Resuming from ${Math.floor(p.current_time)}s (S${p.season}E${p.episode})`);
+      }
+    }
+
+  } catch (err) {
+    console.error('Extraction failed:', err);
+    const relayed = await tryCaptchaRelay();
+    if (relayed) return;
+    showError(`Could not extract stream URL.\n${err.message}`);
+  }
+}
+
+init();
+</script>
+</body>
+</html>
