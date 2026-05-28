@@ -8,6 +8,8 @@ function DetailPage({ mediaType, mediaId }) {
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const [progress, setProgress] = useState(0); // 0-1, watch progress from database
+  const [progressData, setProgressData] = useState(null); // full DB row
+  const [downloading, setDownloading] = useState(null);  // key of active download
   const [inList, setInList] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [seasonDropdownOpen, setSeasonDropdownOpen] = useState(false);
@@ -67,7 +69,7 @@ function DetailPage({ mediaType, mediaId }) {
     }
   }
 
-  function playEpisode(seasonNum, episodeNum) {
+  function playEpisode(seasonNum, episodeNum, startOver = false) {
     const currentSeason = item.seasons?.find(s => s.season_number === seasonNum);
     const totalEpisodes = currentSeason?.episode_count || 0;
     const mediaRef = item.imdb_id || item.tmdb_id;
@@ -78,7 +80,8 @@ function DetailPage({ mediaType, mediaId }) {
     const posterP   = encodeURIComponent(item.poster   || '');
     const backdropP = encodeURIComponent(item.backdrop || '');
     const toneP     = encodeURIComponent(item.tone     || '#5BB7FF');
-    window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${epTitle}&src=${encodeURIComponent(src)}&season=${seasonNum}&episode=${episodeNum}&totalEpisodes=${totalEpisodes}&${idParam}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}`;
+    const soParam   = startOver ? '&startOver=1' : '';
+    window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${epTitle}&src=${encodeURIComponent(src)}&season=${seasonNum}&episode=${episodeNum}&totalEpisodes=${totalEpisodes}&${idParam}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}${soParam}`;
   }
 
   async function loadSimilar(type) {
@@ -101,6 +104,7 @@ function DetailPage({ mediaType, mediaId }) {
       const result = await response.json();
       if (result.success && result.data) {
         setProgress(result.data.progress);
+        setProgressData(result.data);
       }
     } catch (error) {
       console.error('Failed to load progress:', error);
@@ -144,6 +148,33 @@ function DetailPage({ mediaType, mediaId }) {
       }
     } catch (error) {
       console.error('Failed to toggle list:', error);
+    }
+  }
+
+  async function downloadItem(season, episode, epTitle) {
+    const key = season ? `s${season}e${episode}` : 'movie';
+    if (downloading === key) return;
+    setDownloading(key);
+    try {
+      // Resolve stream URL first (uses cache when available)
+      const pid = window.currentProfileId || 1;
+      let streamUrl = `${window.API_BASE_URL}/stream/${mediaType}/${mediaId}`;
+      const sp = new URLSearchParams();
+      if (item.imdb_id) sp.set('imdbId', item.imdb_id);
+      if (season)  { sp.set('season', season); sp.set('episode', episode); }
+      const result = await fetch(`${streamUrl}?${sp}`).then(r => r.json());
+      if (!result.success) throw new Error(result.error || 'Stream not found');
+
+      const { stream_url, filename } = result.data;
+      const dlTitle = epTitle || item.title;
+      const proxyParams = new URLSearchParams({ url: stream_url, download: '1', dlname: dlTitle });
+      if (filename) proxyParams.set('filename', filename);
+      window.location.href = `${window.API_BASE_URL}/stream/proxy?${proxyParams}`;
+    } catch (err) {
+      console.error('Download failed:', err);
+      alert('Could not start download: ' + err.message);
+    } finally {
+      setTimeout(() => setDownloading(null), 4000);
     }
   }
 
@@ -228,14 +259,13 @@ function DetailPage({ mediaType, mediaId }) {
               <button
                 className="btn btn--primary btn--large"
                 onClick={() => {
-                  // TV/anime: start at S1E1 so episode nav context is available
                   if ((mediaType === 'tv' || mediaType === 'anime') && item.seasons && item.seasons.length > 0) {
                     playEpisode(1, 1);
                   } else {
                     const posterP   = encodeURIComponent(item.poster   || '');
                     const backdropP = encodeURIComponent(item.backdrop || '');
                     const toneP     = encodeURIComponent(item.tone     || '#5BB7FF');
-                    const idKey2   = item.imdb_id ? `imdb=${item.imdb_id}` : `tmdb=${item.tmdb_id}`;
+                    const idKey2    = item.imdb_id ? `imdb=${item.imdb_id}` : `tmdb=${item.tmdb_id}`;
                     const embedSrc  = `https://vidsrc-embed.ru/embed/movie?${idKey2}`;
                     const imdbParam = item.imdb_id ? `&imdbId=${item.imdb_id}` : '';
                     window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${encodeURIComponent(item.title)}&src=${encodeURIComponent(embedSrc)}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}${imdbParam}`;
@@ -247,6 +277,33 @@ function DetailPage({ mediaType, mediaId }) {
                 </svg>
                 {hasProgress ? 'Resume' : 'Play'}
               </button>
+
+              {/* Start Over — only shown when there's saved progress */}
+              {hasProgress && (
+                <button
+                  className="btn btn--glass btn--large"
+                  onClick={() => {
+                    if ((mediaType === 'tv' || mediaType === 'anime') && item.seasons && item.seasons.length > 0) {
+                      playEpisode(1, 1, true);
+                    } else {
+                      const posterP   = encodeURIComponent(item.poster   || '');
+                      const backdropP = encodeURIComponent(item.backdrop || '');
+                      const toneP     = encodeURIComponent(item.tone     || '#5BB7FF');
+                      const idKey2    = item.imdb_id ? `imdb=${item.imdb_id}` : `tmdb=${item.tmdb_id}`;
+                      const embedSrc  = `https://vidsrc-embed.ru/embed/movie?${idKey2}`;
+                      const imdbParam = item.imdb_id ? `&imdbId=${item.imdb_id}` : '';
+                      window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${encodeURIComponent(item.title)}&src=${encodeURIComponent(embedSrc)}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}${imdbParam}&startOver=1`;
+                    }
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                  </svg>
+                  Start Over
+                </button>
+              )}
+
               <button className="btn btn--glass btn--large" onClick={toggleList}>
                 <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                   {inList ? (
@@ -262,11 +319,39 @@ function DetailPage({ mediaType, mediaId }) {
                   <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>
                 </svg>
               </button>
+
+              {/* Download — movies only; TV has per-episode buttons */}
+              {mediaType === 'movie' && (
+                <button
+                  className={'btn btn--glass btn--icon btn--large' + (downloading === 'movie' ? ' is-loading' : '')}
+                  aria-label="Download"
+                  onClick={() => downloadItem(null, null, item.title)}
+                  disabled={downloading === 'movie'}
+                >
+                  {downloading === 'movie' ? (
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                      <circle cx="12" cy="12" r="10" opacity="0.25"/>
+                      <path d="M12 2 A10 10 0 0 1 22 12" opacity="0.75">
+                        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                      </path>
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                    </svg>
+                  )}
+                </button>
+              )}
             </div>
 
             {/* Progress Bar */}
             {hasProgress && (
               <div className="detail-progress">
+                {progressData?.season > 0 && (
+                  <div className="detail-progress-episode">
+                    S{progressData.season} E{progressData.episode}
+                  </div>
+                )}
                 <div className="detail-progress-bar">
                   <div
                     className="detail-progress-fill"
@@ -373,7 +458,28 @@ function DetailPage({ mediaType, mediaId }) {
                       <div className="episode-num-badge">E{ep.episode_number}</div>
                     </div>
                     <div className="episode-info">
-                      <div className="episode-title">{ep.name}</div>
+                      <div className="episode-info-top">
+                        <div className="episode-title">{ep.name}</div>
+                        <button
+                          className="episode-dl-btn"
+                          aria-label="Download episode"
+                          disabled={downloading === `s${selectedSeason}e${ep.episode_number}`}
+                          onClick={e => { e.stopPropagation(); downloadItem(selectedSeason, ep.episode_number, `${item.title}.S${String(selectedSeason).padStart(2,'0')}E${String(ep.episode_number).padStart(2,'0')}`); }}
+                        >
+                          {downloading === `s${selectedSeason}e${ep.episode_number}` ? (
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <circle cx="12" cy="12" r="10" opacity="0.25"/>
+                              <path d="M12 2 A10 10 0 0 1 22 12" opacity="0.75">
+                                <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                              </path>
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                            </svg>
+                          )}
+                        </button>
+                      </div>
                       <div className="episode-meta">
                         {ep.runtime ? <span>{ep.runtime}m</span> : null}
                         {ep.vote_average > 0 ? <span>★ {ep.vote_average.toFixed(1)}</span> : null}

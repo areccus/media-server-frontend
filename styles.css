@@ -1632,6 +1632,15 @@ img {
   transition: width 0.3s ease;
 }
 
+.detail-progress-episode {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--txt-1);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+}
+
 .detail-progress-text {
   font-size: 13px;
   color: var(--txt-2);
@@ -1889,13 +1898,36 @@ img {
   padding-top: 4px;
 }
 
+.episode-info-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
 .episode-title {
+  flex: 1;
   font-size: 15px;
   font-weight: 500;
   color: var(--txt-0);
-  margin-bottom: 4px;
   line-height: 1.3;
 }
+
+.episode-dl-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.07);
+  color: var(--txt-1);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.episode-dl-btn:hover { background: rgba(255,255,255,0.15); color: var(--txt-0); }
+.episode-dl-btn:disabled { opacity: 0.5; cursor: default; }
 
 .episode-meta {
   display: flex;
@@ -2267,6 +2299,15 @@ img {
   -webkit-box-orient: vertical;
   overflow: hidden;
   line-height: 1.3;
+}
+
+.library-card__episode {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--txt-1);
+  margin-bottom: 4px;
 }
 
 .library-card__meta {

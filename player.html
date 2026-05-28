@@ -638,6 +638,7 @@ const episode   = parseInt(P.get('episode'))       || 0;
 const totalEps  = parseInt(P.get('totalEpisodes')) || 0;
 const imdbId    = P.get('imdbId')  || '';
 const tmdbId    = P.get('tmdbId')  || '';
+const startOver = P.get('startOver') === '1';
 const poster    = P.get('poster')   || '';
 const backdrop  = P.get('backdrop') || '';
 const tone      = P.get('tone')     || '#5BB7FF';
@@ -1039,7 +1040,7 @@ function useEmbed() {
 }
 
 // ── HLS.js / native loader ────────────────────────────────────────────────
-function loadStream(url, filename) {
+function loadStream(url, filename, resumeAt) {
   clearTimeout(_cfHint);
   finishProgress();
   document.getElementById('loading').style.display = 'none';
@@ -1049,6 +1050,10 @@ function loadStream(url, filename) {
   // Always proxy — fixes content-type, remuxes MKV→MP4 for iOS, rewrites m3u8 segments.
   const proxyParams = new URLSearchParams({ url });
   if (filename) proxyParams.set('filename', filename);
+  // For remuxed streams, tell FFmpeg where to start so there's no seek delay
+  if (resumeAt && resumeAt > 4 && filename && filename.toLowerCase().endsWith('.mkv')) {
+    proxyParams.set('t', Math.floor(resumeAt));
+  }
   const srcUrl = `${API}/stream/proxy?${proxyParams}`;
 
   if (isHLS && Hls.isSupported()) {
@@ -1195,16 +1200,21 @@ async function init() {
 
     console.log(`Stream source: ${data.data.source} — ${data.data.stream_url.slice(0,80)}…`);
 
-    loadStream(data.data.stream_url, data.data.filename || '');
-
-    // Resume from saved position if this is the same episode we left off on
-    if (savedProgress?.success && savedProgress.data) {
+    let resumeAt = 0;
+    if (!startOver && savedProgress?.success && savedProgress.data) {
       const p = savedProgress.data;
       const sameEp = !isEp || (p.season === season && p.episode === episode);
       if (sameEp && p.current_time > 4 && p.progress < 0.95) {
-        _resumeAt = p.current_time;
-        console.log(`Resuming from ${Math.floor(p.current_time)}s (S${p.season}E${p.episode})`);
+        resumeAt = p.current_time;
+        console.log(`Resuming from ${Math.floor(p.current_time)}s`);
       }
+    }
+
+    loadStream(data.data.stream_url, data.data.filename || '', resumeAt);
+
+    // For non-MKV streams, seek via currentTime after metadata loads
+    if (resumeAt > 4) {
+      _resumeAt = resumeAt;
     }
 
   } catch (err) {

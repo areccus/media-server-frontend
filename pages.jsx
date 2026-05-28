@@ -193,6 +193,8 @@ function LibraryPage() {
         backdrop: item.backdrop,
         tone: item.tone,
         progress: item.progress,
+        season: item.season || 0,
+        episode: item.episode || 0,
         meta: item.media_type === 'movie' ? 'Movie' : 'TV Show'
       }));
       setContinueWatching(withProgress);
@@ -305,6 +307,9 @@ function LibraryCard({ item, showProgress }) {
       )}
       <div className="library-card__info">
         <div className="library-card__title">{item.title}</div>
+        {item.season > 0 && (
+          <div className="library-card__episode">S{item.season} E{item.episode}</div>
+        )}
         <div className="library-card__meta">
           {item.year} • {item.rating}
           {item.vote_average && ` • ★ ${item.vote_average.toFixed(1)}`}
@@ -317,6 +322,70 @@ function LibraryCard({ item, showProgress }) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Genre-organized pages (Movies, TV, Anime)
 // ─────────────────────────────────────────────────────────────────────────────
+
+function GenreRow({ genreName, items }) {
+  const scrollerRef = useRef(null);
+  const [canL, setCanL] = useState(false);
+  const [canR, setCanR] = useState(true);
+
+  function update() {
+    const el = scrollerRef.current;
+    if (!el) return;
+    setCanL(el.scrollLeft > 4);
+    setCanR(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }
+
+  useEffect(() => {
+    update();
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      el.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  function nudge(dir) {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * Math.round(el.clientWidth * 0.85), behavior: 'smooth' });
+  }
+
+  return (
+    <section className="genre-section">
+      <h2 className="genre-section-title">{genreName}</h2>
+      <div className="row__wrap">
+        <button
+          className={'rownav rownav--l' + (canL ? '' : ' is-off')}
+          aria-label="Scroll left"
+          onClick={() => nudge(-1)}
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="m15 6-6 6 6 6"/>
+          </svg>
+        </button>
+        <div className="genre-row__scroll" ref={scrollerRef}>
+          {items.map(item => (
+            <div key={item.id} className="genre-card-wrapper">
+              <CategoryCard item={item} glowMode="tone" glowIntensity={1.7} cardRadius={21} />
+            </div>
+          ))}
+        </div>
+        <button
+          className={'rownav rownav--r' + (canR ? '' : ' is-off')}
+          aria-label="Scroll right"
+          onClick={() => nudge(1)}
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="m9 6 6 6-6 6"/>
+          </svg>
+        </button>
+      </div>
+    </section>
+  );
+}
 
 function GenrePage({ type, title }) {
   const [genresData, setGenresData] = useState({});
@@ -367,23 +436,7 @@ function GenrePage({ type, title }) {
       <div className="genre-sections">
         {Object.entries(genresData).map(([genreName, items]) => (
           items.length > 0 && (
-            <section key={genreName} className="genre-section">
-              <h2 className="genre-section-title">{genreName}</h2>
-              <div className="genre-row">
-                <div className="genre-row__scroll">
-                  {items.map(item => (
-                    <div key={item.id} className="genre-card-wrapper">
-                      <CategoryCard
-                        item={item}
-                        glowMode="tone"
-                        glowIntensity={1.7}
-                        cardRadius={21}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
+            <GenreRow key={genreName} genreName={genreName} items={items} />
           )
         ))}
       </div>
@@ -395,5 +448,6 @@ function GenrePage({ type, title }) {
 Object.assign(window, {
   SearchPage,
   LibraryPage,
+  GenreRow,
   GenrePage
 });

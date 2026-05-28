@@ -501,13 +501,29 @@ function Hero({ heroIds, onHeroChange, glassRadius, glassStrength }) {
   // STATE MANAGEMENT
   // ───────────────────────────────────────────────────────────────────────
 
-  const [idx, setIdx] = useState(0);         // Current hero index (0-4)
-  const [prev, setPrev] = useState(null);    // Previous index (for fade out)
-  const [paused, setPaused] = useState(false);  // Is auto-cycle paused?
-  const [focused, setFocused] = useState(false); // Is hero focused?
+  const [idx, setIdx] = useState(0);
+  const [prev, setPrev] = useState(null);
+  const [paused, setPaused] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const [heroProgress, setHeroProgress] = useState(0);
 
-  // Get current item data from global ITEMS object
   const item = ITEMS[heroIds[idx]];
+
+  // Fetch watch progress for the current hero item
+  useEffect(() => {
+    if (!item || !window.API_BASE_URL) return;
+    const [type, id] = item.id.split('_');
+    const pid = window.currentProfileId || 1;
+    fetch(`${window.API_BASE_URL}/progress/${type}/${id}?profile_id=${pid}`)
+      .then(r => r.json())
+      .then(d => setHeroProgress(d.success && d.data ? d.data.progress : 0))
+      .catch(() => setHeroProgress(0));
+  }, [item?.id]);
+
+  function goToDetail() {
+    const [type, id] = item.id.split('_');
+    window.navigate(`detail/${type}/${id}`);
+  }
 
   // ───────────────────────────────────────────────────────────────────────
   // AUTO-CYCLE EFFECT
@@ -562,17 +578,14 @@ function Hero({ heroIds, onHeroChange, glassRadius, glassStrength }) {
   return (
     <section
       className={'hero' + (focused ? ' is-focus' : '')}
-      tabIndex={0}  // Make focusable with keyboard
-      // Pause on hover
+      tabIndex={0}
+      onClick={goToDetail}
+      style={{ '--hero-tone': item.tone, cursor: 'pointer' }}
       onMouseEnter={() => { setPaused(true); setFocused(true); }}
       onMouseLeave={() => { setPaused(false); setFocused(false); }}
-      // Pause on keyboard focus
       onFocus={() => setFocused(true)}
       onBlur={() => setFocused(false)}
-      // Pause on touch
       onTouchStart={() => setFocused(true)}
-      // CSS variable for accent color
-      style={{ '--hero-tone': item.tone }}
     >
       {/* ───────────────────────────────────────────────────────────────── */}
       {/* IMAGE STAGE (all hero images, only one visible at a time) */}
@@ -641,16 +654,14 @@ function Hero({ heroIds, onHeroChange, glassRadius, glassStrength }) {
         <p className="hero__synopsis">{item.synopsis}</p>
 
         {/* Action buttons */}
-        <div className="hero__actions">
-          {/* Primary play button */}
-          <button className="btn btn--primary">
+        <div className="hero__actions" onClick={e => e.stopPropagation()}>
+          <button className="btn btn--primary" onClick={goToDetail}>
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
               <path fill="currentColor" d="M8 5v14l11-7z"/>
             </svg>
-            Play
+            {heroProgress > 0.05 ? 'Resume' : 'Play'}
           </button>
 
-          {/* Add to list button (glass style) */}
           <button className="btn btn--glass">
             <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
               <path d="M12 5v14M5 12h14"/>
@@ -658,8 +669,7 @@ function Hero({ heroIds, onHeroChange, glassRadius, glassStrength }) {
             My List
           </button>
 
-          {/* Info button (icon only) */}
-          <button className="btn btn--glass btn--icon" aria-label="More info">
+          <button className="btn btn--glass btn--icon" aria-label="More info" onClick={goToDetail}>
             <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
               <circle cx="12" cy="12" r="9"/>
               <path d="M12 16v-5M12 8h.01"/>
