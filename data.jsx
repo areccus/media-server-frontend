@@ -169,13 +169,26 @@ async function detectBackendPort() {
  *   3. After 8 hours: Cache expires, fetch from backend again
  */
 const apiCache = {
-  data: {},         // Stores actual API responses
-  timestamps: {},   // Stores when each response was cached
-  CACHE_DURATION: 8 * 60 * 60 * 1000  // 8 hours in milliseconds
-                                        // 8 hours = 8 * 60 minutes = 480 minutes
-                                        // 480 minutes = 480 * 60 seconds = 28,800 seconds
-                                        // 28,800 seconds = 28,800 * 1,000 ms = 28,800,000 ms
+  data: {},
+  timestamps: {},
+  CACHE_DURATION: 8 * 60 * 60 * 1000,   // 8 hours in-memory
+  DISK_DURATION:  2 * 60 * 60 * 1000,   // 2 hours localStorage
 };
+
+// localStorage helpers — silent on quota errors
+const LS_PREFIX = 'halo_cache_';
+function lsGet(endpoint) {
+  try {
+    const raw = localStorage.getItem(LS_PREFIX + endpoint);
+    if (!raw) return null;
+    const { ts, data } = JSON.parse(raw);
+    if (Date.now() - ts > apiCache.DISK_DURATION) { localStorage.removeItem(LS_PREFIX + endpoint); return null; }
+    return { ts, data };
+  } catch { return null; }
+}
+function lsSet(endpoint, data) {
+  try { localStorage.setItem(LS_PREFIX + endpoint, JSON.stringify({ ts: Date.now(), data })); } catch {}
+}
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -213,64 +226,48 @@ const apiCache = {
  *   // Second call: Returns from cache (instant!)
  */
 async function fetchWithCache(endpoint) {
-  const now = Date.now();  // Current timestamp in milliseconds
+  const now = Date.now();
 
-  // ───────────────────────────────────────────────────────────────────────
-  // STEP 1: Check if we have valid cached data
-  // ───────────────────────────────────────────────────────────────────────
-
-  if (apiCache.data[endpoint] &&                               // Have cached data?
-      apiCache.timestamps[endpoint] &&                         // Have timestamp?
-      (now - apiCache.timestamps[endpoint]) < apiCache.CACHE_DURATION) {  // Not expired?
-
-    // Cache HIT! Return cached data without network request
-    // This is INSTANT because data is already in memory
+  // 1. In-memory hit (fastest — same session navigation)
+  if (apiCache.data[endpoint] && apiCache.timestamps[endpoint] &&
+      (now - apiCache.timestamps[endpoint]) < apiCache.CACHE_DURATION) {
     return apiCache.data[endpoint];
   }
 
-  // ───────────────────────────────────────────────────────────────────────
-  // STEP 2: Cache MISS - fetch from backend
-  // ───────────────────────────────────────────────────────────────────────
+  // 2. localStorage hit (fast — survives page refresh, up to 2 hours)
+  const disk = lsGet(endpoint);
+  if (disk) {
+    // Warm in-memory cache from disk so next nav is instant
+    apiCache.data[endpoint] = disk.data;
+    apiCache.timestamps[endpoint] = disk.ts;
 
+    // Revalidate in the background without blocking the caller
+    fetchFresh(endpoint);
+
+    return disk.data;
+  }
+
+  // 3. Cold fetch — nothing cached anywhere
+  return fetchFresh(endpoint);
+}
+
+async function fetchFresh(endpoint) {
   try {
-    // Make HTTP GET request to backend
-    // API_BASE_URL = "http://localhost:5001/api"
-    // endpoint = "/hero"
-    // Full URL = "http://localhost:5001/api/hero"
     const response = await fetch(`${API_BASE_URL}${endpoint}`);
-
-    // Check if response was successful
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    // Parse JSON response
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const result = await response.json();
+    if (!result.success) throw new Error(result.error || 'API error');
 
-    // Backend returns: { success: true/false, data: [...], error: "..." }
-    if (result.success) {
-      // ─────────────────────────────────────────────────────────────────
-      // STEP 3: Cache the result for future requests
-      // ─────────────────────────────────────────────────────────────────
+    const now = Date.now();
+    apiCache.data[endpoint] = result.data;
+    apiCache.timestamps[endpoint] = now;
+    lsSet(endpoint, result.data);
 
-      apiCache.data[endpoint] = result.data;       // Save data
-      apiCache.timestamps[endpoint] = now;         // Save timestamp
-
-      return result.data;  // Return fresh data
-    } else {
-      // Backend returned success: false
-      throw new Error(result.error || 'API request failed');
-    }
-
+    return result.data;
   } catch (error) {
-    // ───────────────────────────────────────────────────────────────────
-    // STEP 4: Error occurred - return fallback data
-    // ───────────────────────────────────────────────────────────────────
-
     console.error(`Failed to fetch ${endpoint}:`, error);
-
-    // Return placeholder data so app doesn't crash
-    return getFallbackData(endpoint);
+    // Return in-memory stale data if we have it, otherwise fallback
+    return apiCache.data[endpoint] || getFallbackData(endpoint);
   }
 }
 

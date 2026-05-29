@@ -627,86 +627,92 @@ function Hero({ heroIds, onHeroChange, glassRadius, glassStrength }) {
         })}
       </div>
 
-      {/* ───────────────────────────────────────────────────────────────── */}
-      {/* CONTENT OVERLAY (title, buttons, etc.) */}
-      {/* ───────────────────────────────────────────────────────────────── */}
+      {/* CONTENT OVERLAY — two-column editorial layout */}
       <div className="hero__content">
-        {/* "Featured" eyebrow with animated dot */}
-        <div className="hero__eyebrow">
-          <span className="dot"></span>Featured
-        </div>
 
-        {/* Title */}
-        <h1 className="hero__title">{item.title}</h1>
+        {/* LEFT COLUMN — title, meta, actions, dots */}
+        <div className="hero__left">
+          <div className="hero__eyebrow">
+            <span className="dot"></span>
+            <span>Featured</span>
+            <span className="sep"></span>
+            <em>{item.kind === 'series' ? 'Series' : 'Film'}</em>
+          </div>
 
-        {/* Metadata (year, rating, runtime, genre) */}
-        <div className="hero__meta">
-          <span>{item.year}</span>
-          <span className="hero__sep"></span>  {/* Separator dot */}
-          <span>{item.rating}</span>
-          <span className="hero__sep"></span>
-          <span>{item.runtime}</span>
-          <span className="hero__sep"></span>
-          <span>{item.genre}</span>
-        </div>
+          <h1 className="hero__title">{item.title}</h1>
+          {item.tagline && <p className="hero__tagline">"{item.tagline}"</p>}
 
-        {/* Synopsis (shortened overview) */}
-        <p className="hero__synopsis">{item.synopsis}</p>
+          <div className="hero__meta">
+            <span>{item.year}</span>
+            <span className="hero__sep"></span>
+            <span className="hero__chip">{item.rating}</span>
+            <span>{item.runtime}</span>
+            <span className="hero__sep"></span>
+            <span>{item.genre}</span>
+          </div>
 
-        {/* Action buttons */}
-        <div className="hero__actions" onClick={e => e.stopPropagation()}>
-          <button className="btn btn--primary" onClick={goToDetail}>
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
-              <path fill="currentColor" d="M8 5v14l11-7z"/>
-            </svg>
-            {heroProgress > 0.05 ? 'Resume' : 'Play'}
-          </button>
+          <p className="hero__synopsis">{item.synopsis}</p>
 
-          <button className="btn btn--glass">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <path d="M12 5v14M5 12h14"/>
-            </svg>
-            My List
-          </button>
-
-          <button className="btn btn--glass btn--icon" aria-label="More info" onClick={goToDetail}>
-            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-              <circle cx="12" cy="12" r="9"/>
-              <path d="M12 16v-5M12 8h.01"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* ─────────────────────────────────────────────────────────────── */}
-        {/* PAGINATION DOTS (with animated progress fill) */}
-        {/* ─────────────────────────────────────────────────────────────── */}
-        <div className="hero__dots" role="tablist" aria-label="Featured selection">
-          {heroIds.map((id, i) => (
-            <button
-              key={id}
-              role="tab"
-              aria-selected={i === idx}
-              className={'herodot' + (i === idx ? ' is-active' : '')}
-              onClick={() => go(i)}
-            >
-              {/* Progress fill animates from 0% to 100% over 8.5 seconds */}
-              <span
-                className="herodot__fill"
-                style={{
-                  // No animation when paused (0s duration)
-                  animationDuration: paused ? '0s' : '8.5s',
-                  // Only run animation on active dot when not paused
-                  animationPlayState: (i === idx && !paused) ? 'running' : 'paused'
-                }}
-              ></span>
+          <div className="hero__actions" onClick={e => e.stopPropagation()}>
+            <button className="btn btn--primary" onClick={goToDetail}>
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path fill="currentColor" d="M8 5v14l11-7z"/>
+              </svg>
+              {heroProgress > 0.05 ? 'Resume' : 'Play'}
             </button>
-          ))}
+
+            <button className="btn btn--glass">
+              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+              My List
+            </button>
+
+            <button className="btn btn--glass btn--icon" aria-label="More info" onClick={goToDetail}>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                <circle cx="12" cy="12" r="9"/>
+                <path d="M12 16v-5M12 8h.01"/>
+              </svg>
+            </button>
+          </div>
+
+          <div className="hero__dots" role="tablist" aria-label="Featured selection">
+            {heroIds.map((id, i) => (
+              <button
+                key={id}
+                role="tab"
+                aria-selected={i === idx}
+                className={'herodot' + (i === idx ? ' is-active' : '')}
+                onClick={() => go(i)}
+              >
+                <span
+                  className="herodot__fill"
+                  style={{
+                    animationDuration: paused ? '0s' : '8.5s',
+                    animationPlayState: (i === idx && !paused) ? 'running' : 'paused'
+                  }}
+                ></span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* RIGHT COLUMN — score gauge + episode peek (desktop only) */}
+        <div className="hero__right">
+          <ScoreGauge score={item.score || Math.round((item.vote_average || 7.5) * 10)} tone={item.tone}/>
+          {item.kind === 'series' && item.episodeNow && (
+            <div className="hero-ep">
+              <div className="hero-ep__num">S{item.episodeNow.s}<span style={{ opacity:.5 }}>·</span>E{item.episodeNow.e}</div>
+              <div className="hero-ep__body">
+                <div className="hero-ep__label">Up Next</div>
+                <div className="hero-ep__title">{item.episodeNow.title}</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* ───────────────────────────────────────────────────────────────── */}
       {/* DECORATIVE ELEMENTS */}
-      {/* ───────────────────────────────────────────────────────────────── */}
 
       {/* "Plex Original" badge (top right) */}
       <div className="hero__brandtag">
@@ -868,7 +874,7 @@ function LazyImage({ src, alt = "", ...props }) {
  * Example:
  *   <Card item={ITEMS['movie_550']} kind="poster" glowMode="tone" glowIntensity={0.8} cardRadius={12} />
  */
-function Card({ item, kind = 'poster', glowMode, glowIntensity, cardRadius }) {
+function Card({ item, kind = 'poster', glowMode, glowIntensity, cardRadius, layout, variant, alwaysCaption }) {
   // ───────────────────────────────────────────────────────────────────────
   // STATE AND REFS
   // ───────────────────────────────────────────────────────────────────────
@@ -884,6 +890,7 @@ function Card({ item, kind = 'poster', glowMode, glowIntensity, cardRadius }) {
     ty: 0   // translateY (vertical offset)
   });
 
+  const isPortrait = layout === 'portrait';
   // Glow color: use poster tone or fixed blue
   const tone = glowMode === 'tone' ? item.tone : '#5BB7FF';
 
@@ -922,8 +929,8 @@ function Card({ item, kind = 'poster', glowMode, glowIntensity, cardRadius }) {
     // Convert to rotation angles (degrees)
     // Center (0.5, 0.5) = no rotation
     // Edges = maximum rotation
-    const ry = (px - 0.5) * 10;  // Horizontal tilt (-5° to +5°)
-    const rx = (0.5 - py) * 8;   // Vertical tilt (-4° to +4°)
+    const ry = (px - 0.5) * 5;   // Horizontal tilt — subtle
+    const rx = (0.5 - py) * 3;   // Vertical tilt — subtle
 
     // Translation offsets for sheen effect
     const tx = (px - 0.5) * 6;   // Horizontal offset
@@ -945,18 +952,16 @@ function Card({ item, kind = 'poster', glowMode, glowIntensity, cardRadius }) {
   // STYLING
   // ───────────────────────────────────────────────────────────────────────
 
-  // Get landscape image URL (16:9 aspect ratio)
-  const url = landscapeUrl(item);
+  const url = isPortrait ? posterUrl(item) : landscapeUrl(item);
+  const matchScore = item.matchScore || Math.round((item.vote_average || 7.5) * 10);
 
-  // CSS variables and inline styles
   const style = {
-    '--glow': tone,  // Base glow color
-    // Multiple glow layers with different opacities
-    '--glow-a': hexA(tone, 0.55 * glowIntensity),  // Brightest
-    '--glow-b': hexA(tone, 0.32 * glowIntensity),  // Medium
-    '--glow-c': hexA(tone, 0.18 * glowIntensity),  // Faintest
-    '--card-radius': cardRadius + 'px',  // Border radius
-    aspectRatio: '16/9',  // Maintain 16:9 ratio (CSS property)
+    '--glow': tone,
+    '--glow-a': hexA(tone, 0.55 * glowIntensity),
+    '--glow-b': hexA(tone, 0.32 * glowIntensity),
+    '--glow-c': hexA(tone, 0.18 * glowIntensity),
+    '--card-radius': cardRadius + 'px',
+    aspectRatio: isPortrait ? '2/3' : '16/9',
   };
 
   // ───────────────────────────────────────────────────────────────────────
@@ -966,7 +971,7 @@ function Card({ item, kind = 'poster', glowMode, glowIntensity, cardRadius }) {
   return (
     <div
       ref={ref}
-      className={'card card--' + kind + (hover ? ' is-hover' : '')}
+      className={['card', 'card--' + kind, isPortrait && 'card--portrait', variant && 'card--' + variant, hover && 'is-hover'].filter(Boolean).join(' ')}
       tabIndex={0}  // Make keyboard focusable
       style={style}
       // Mouse events
@@ -982,13 +987,22 @@ function Card({ item, kind = 'poster', glowMode, glowIntensity, cardRadius }) {
       {/* Glass shelf effect (bottom edge) */}
       <div className="card__shelf" aria-hidden="true"></div>
 
+      {/* Badges */}
+      {variant === 'match' && <MatchBadge score={matchScore}/>}
+      {variant === 'fresh' && <NewPulse hot={matchScore > 85}/>}
+      {variant === 'series' && item.season && <SeasonBadge season={item.season}/>}
+      {variant === 'anime' && <StarBadge score={(item.vote_average || 7.5) * 10}/>}
+
+      {/* Save (+) button */}
+      <button className="card__save" aria-label="Add to My List" onClick={e => e.stopPropagation()}>+</button>
+
       {/* Lifting container with 3D transforms */}
       <div
         className="card__lift"
         style={{
           transform: hover
             // Hover: Tilt + lift + scale
-            ? `perspective(900px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg) translateY(-7px) scale(1.06)`
+            ? `perspective(900px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg) translateY(-12px) scale(1.10)`
             // No hover: Neutral position
             : 'perspective(900px) rotateX(0) rotateY(0) translateY(0) scale(1)'
         }}
@@ -1037,12 +1051,17 @@ function Card({ item, kind = 'poster', glowMode, glowIntensity, cardRadius }) {
         <div className="card__neon-cast"></div>  {/* Soft glow halo */}
       </div>
 
-      {/* Caption (shown on hover) */}
-      <div className="card__caption" aria-hidden={!hover}>
+      {/* Caption */}
+      <div className={'card__caption' + (alwaysCaption ? ' card__caption--always' : '')} aria-hidden={!hover && !alwaysCaption}>
         <div className="card__title">{item.title}</div>
-        {item.sub && <div className="card__sub">{item.sub}</div>}
-        {!item.sub && item.meta && <div className="card__sub">{item.meta}</div>}
+        {!alwaysCaption && (item.sub || item.meta) && <div className="card__sub">{item.sub || item.meta}</div>}
       </div>
+      {isPortrait && (
+        <div className="card__poster-meta">
+          <div className="card__poster-title">{item.title}</div>
+          <div className="card__poster-sub">{[item.year, item.genre].filter(Boolean).join(' · ')}</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1137,8 +1156,18 @@ function Row({ row, glowMode, glowIntensity, cardRadius }) {
   const [canL, setCanL] = useState(false);  // Can scroll left?
   const [canR, setCanR] = useState(true);   // Can scroll right?
 
-  // Is this a "continue watching" row?
   const isCont = row.kind === 'continue';
+
+  // Derive display options from row.id
+  const rowOpts = {
+    rec: { layout: 'portrait', variant: 'match',  alwaysCaption: true,  sub: null },
+    mv:  { layout: 'portrait', variant: null,     alwaysCaption: false, sub: null },
+    tv:  { layout: 'portrait', variant: 'series', alwaysCaption: false, sub: 'Including new episodes' },
+    an:  { layout: 'portrait', variant: 'anime',  alwaysCaption: false, sub: 'Anime series & films' },
+  };
+  const { layout, variant, alwaysCaption, sub } = rowOpts[row.id] || {};
+  const rowClasses = ['row', 'row--' + (isCont ? 'continue' : 'poster'),
+    layout && 'row--portrait', variant && 'row--' + variant].filter(Boolean).join(' ');
 
   // ───────────────────────────────────────────────────────────────────────
   // ARROW VISIBILITY UPDATE
@@ -1224,12 +1253,12 @@ function Row({ row, glowMode, glowIntensity, cardRadius }) {
   // ───────────────────────────────────────────────────────────────────────
 
   return (
-    <section className={'row row--' + (isCont ? 'continue' : 'poster')}>
-      {/* ─────────────────────────────────────────────────────────────── */}
-      {/* HEADER (title + "See all" button) */}
-      {/* ─────────────────────────────────────────────────────────────── */}
+    <section className={rowClasses}>
       <header className="row__head">
-        <h2 className="row__title">{row.label}</h2>
+        <div className="row__head-text">
+          <h2 className="row__title">{row.label}</h2>
+          {sub && <div className="row__sub">{sub}</div>}
+        </div>
 
         {/* "See all" button (if route exists for this row) */}
         {routeMap[row.id] && (
@@ -1264,16 +1293,23 @@ function Row({ row, glowMode, glowIntensity, cardRadius }) {
         <div className="row__scroll" ref={scrollerRef}>
           <div className="row__inner">
             {/* Render cards for each item */}
-            {row.items.map(id => (
-              <Card
-                key={id}
-                item={ITEMS[id]}
-                kind={isCont ? 'continue' : 'poster'}
-                glowMode={glowMode}
-                glowIntensity={glowIntensity}
-                cardRadius={cardRadius}
-              />
-            ))}
+            {row.items.map(id => {
+              const itm = ITEMS[id];
+              if (!itm) return null;
+              return (
+                <Card
+                  key={id}
+                  item={itm}
+                  kind={isCont ? 'continue' : 'poster'}
+                  layout={layout}
+                  variant={variant}
+                  alwaysCaption={alwaysCaption}
+                  glowMode={glowMode}
+                  glowIntensity={glowIntensity}
+                  cardRadius={cardRadius}
+                />
+              );
+            })}
           </div>
         </div>
 
@@ -1439,6 +1475,330 @@ function TopBar({ active, setActive }) {
 
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SCORE GAUGE - Circular progress ring for critic score
+// ═══════════════════════════════════════════════════════════════════════════
+
+function ScoreGauge({ score, tone }) {
+  const R = 22;
+  const C = 2 * Math.PI * R;
+  const off = C - (score / 100) * C;
+  return (
+    <div className="hero-score">
+      <div className="hero-score__ring">
+        <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true">
+          <circle cx="28" cy="28" r={R} className="hero-score__ring-track" strokeWidth="3" fill="none"/>
+          <circle cx="28" cy="28" r={R} className="hero-score__ring-fill"
+                  strokeWidth="3" fill="none" strokeLinecap="round"
+                  strokeDasharray={C} strokeDashoffset={off}/>
+        </svg>
+        <div className="hero-score__num">{score}</div>
+      </div>
+      <div className="hero-score__meta">
+        <div className="l1">Critics' score</div>
+        <div className="l2">Top {Math.max(1, Math.round(100 - score))}% this year</div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEVICE STRIP - Casting status indicator for sidebar
+// ═══════════════════════════════════════════════════════════════════════════
+
+function DeviceStrip() {
+  return (
+    <div className="devstrip">
+      <span className="devstrip__pulse"></span>
+      <span className="devstrip__device">This device</span>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CARD BADGES
+// ═══════════════════════════════════════════════════════════════════════════
+
+function MatchBadge({ score }) {
+  const R = 10, C = 2 * Math.PI * R, off = C - (score / 100) * C;
+  return (
+    <div className="match-badge">
+      <svg width="28" height="28" viewBox="0 0 28 28">
+        <circle cx="14" cy="14" r={R} className="match-badge__track" strokeWidth="2.5" fill="none"/>
+        <circle cx="14" cy="14" r={R} className="match-badge__fill" strokeWidth="2.5" fill="none"
+                strokeLinecap="round" strokeDasharray={C} strokeDashoffset={off}
+                style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }}/>
+      </svg>
+      <span className="match-badge__num">{score}%</span>
+    </div>
+  );
+}
+
+function NewPulse({ hot }) {
+  return (
+    <div className={'new-badge' + (hot ? ' new-badge--hot' : '')}>
+      <span className="new-badge__dot"></span>NEW
+    </div>
+  );
+}
+
+function SeasonBadge({ season, episodes }) {
+  return (
+    <div className="season-badge">
+      <span className="season-badge__num">S{season}</span>
+      {episodes && <span className="season-badge__lbl">{episodes} eps</span>}
+    </div>
+  );
+}
+
+function StarBadge({ score }) {
+  const stars = Math.min(5, Math.max(1, Math.round(score / 20)));
+  return (
+    <div className="star-badge">
+      {'★'.repeat(stars)}{'☆'.repeat(5 - stars)}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MOOD RAIL - Genre/mood filter chips below hero
+// ═══════════════════════════════════════════════════════════════════════════
+
+const MOODS = [
+  { id: 'action',      label: 'Action' },
+  { id: 'thriller',   label: 'Thriller' },
+  { id: 'comedy',     label: 'Comedy' },
+  { id: 'drama',      label: 'Drama' },
+  { id: 'horror',     label: 'Horror' },
+  { id: 'scifi',      label: 'Sci-Fi' },
+  { id: 'romance',    label: 'Romance' },
+  { id: 'documentary',label: 'Documentary' },
+];
+
+function MoodRail() {
+  const [active, setActive] = useState(null);
+  return (
+    <div className="moodrail">
+      <span className="moodrail__label">I'm in the mood for</span>
+      {MOODS.map(m => (
+        <button
+          key={m.id}
+          className={'mood-chip' + (active === m.id ? ' is-active' : '')}
+          onClick={() => setActive(active === m.id ? null : m.id)}
+        >
+          {m.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PICKUP SPREAD - Magazine-style continue watching section
+// ═══════════════════════════════════════════════════════════════════════════
+
+function PickupSpread({ profileId }) {
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    if (!profileId) return;
+    fetch(`${window.API_BASE_URL}/library?profile_id=${profileId}`)
+      .then(r => r.json())
+      .then(data => {
+        const cwRow = (data.rows || []).find(r => r.kind === 'continue');
+        const ids = cwRow ? cwRow.items : [];
+        setItems(ids.map(id => ITEMS[id]).filter(Boolean));
+      })
+      .catch(() => {});
+  }, [profileId]);
+
+  if (items.length === 0) return null;
+
+  const feature = items[0];
+  const queue = items.slice(1, 4);
+
+  function goTo(item) {
+    const [type, id] = item.id.split('_');
+    window.navigate(`detail/${type}/${id}`);
+  }
+
+  return (
+    <section className="pickup">
+      <div className="pickup__head">
+        <h2 className="pickup__title">Continue Watching</h2>
+      </div>
+      <div className="pickup__grid">
+        <div className="pickup-feature" onClick={() => goTo(feature)}>
+          <img src={landscapeUrl(feature)} alt={feature.title}/>
+          <div className="pickup-feature__scrim"></div>
+          <div className="pickup-feature__body">
+            <div className="pickup-feature__tag">Continue Watching</div>
+            <div style={{ fontSize: 'clamp(18px,2.4vw,28px)', fontWeight: 700, marginBottom: '12px', color: '#fff', lineHeight: 1.1 }}>
+              {feature.title}
+            </div>
+            <div className="pickup-feature__row">
+              <button className="pickup-feature__resume" onClick={e => { e.stopPropagation(); goTo(feature); }}>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" style={{ verticalAlign: 'middle' }}><path d="M8 5v14l11-7z"/></svg>
+                Resume
+              </button>
+              {feature.progress > 0 && (
+                <div className="pickup-feature__progress">
+                  <div style={{ width: (feature.progress * 100) + '%' }}></div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+        {queue.length > 0 && (
+          <div className="pickup-queue">
+            {queue.map(item => (
+              <div key={item.id} className="pickup-item" onClick={() => goTo(item)}>
+                <div className="pickup-item__art">
+                  <img src={landscapeUrl(item)} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+                </div>
+                <div className="pickup-item__body">
+                  <div style={{ fontSize: '13px', fontWeight: 600, color: '#fff', lineHeight: 1.3 }}>{item.title}</div>
+                  <div style={{ fontSize: '11px', color: 'rgba(255,255,255,.5)', marginTop: '4px' }}>{item.meta || item.year}</div>
+                </div>
+                <button className="pickup-item__play" aria-label="Play">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TOP 10 ROW - Trending row with oversized outlined numerals
+// ═══════════════════════════════════════════════════════════════════════════
+
+function Top10Row({ row, glowMode, glowIntensity, cardRadius }) {
+  const scrollerRef = useRef(null);
+  const [canL, setCanL] = useState(false);
+  const [canR, setCanR] = useState(true);
+
+  function update() {
+    const el = scrollerRef.current;
+    if (!el) return;
+    setCanL(el.scrollLeft > 4);
+    setCanR(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }
+
+  useEffect(() => {
+    update();
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      el.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  function nudge(dir) {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * Math.round(el.clientWidth * 0.85), behavior: 'smooth' });
+  }
+
+  return (
+    <section className="row row--top10">
+      <header className="row__head">
+        <div className="row__head-text">
+          <h2 className="row__title">{row.label}</h2>
+        </div>
+        <button className="row__see" onClick={() => window.navigate('trending')}>
+          See all
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="m9 6 6 6-6 6"/>
+          </svg>
+        </button>
+      </header>
+      <div className="row__wrap">
+        <button className={'rownav rownav--l' + (canL ? '' : ' is-off')} aria-label="Scroll left" onClick={() => nudge(-1)}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m15 6-6 6 6 6"/></svg>
+        </button>
+        <div className="row__scroll" ref={scrollerRef}>
+          <div className="row__inner">
+            {row.items.slice(0, 10).map((id, i) => {
+              const item = ITEMS[id];
+              if (!item) return null;
+              return (
+                <div key={id} className="top10-card">
+                  <div className="top10-card__num">{i + 1}</div>
+                  <Card item={item} kind="poster" layout="portrait"
+                        glowMode={glowMode} glowIntensity={glowIntensity} cardRadius={cardRadius}/>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        <button className={'rownav rownav--r' + (canR ? '' : ' is-off')} aria-label="Scroll right" onClick={() => nudge(1)}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m9 6 6 6-6 6"/></svg>
+        </button>
+      </div>
+    </section>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NOW DOCK - Floating mini-player (bottom-right corner)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function NowDock({ profileId }) {
+  const [item, setItem] = useState(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!profileId) return;
+    fetch(`${window.API_BASE_URL}/library?profile_id=${profileId}`)
+      .then(r => r.json())
+      .then(data => {
+        const cwRow = (data.rows || []).find(r => r.kind === 'continue');
+        const ids = cwRow ? cwRow.items : [];
+        if (ids.length > 0 && ITEMS[ids[0]]) {
+          setItem(ITEMS[ids[0]]);
+          setVisible(true);
+        }
+      })
+      .catch(() => {});
+  }, [profileId]);
+
+  if (!visible || !item) return null;
+
+  function goTo() {
+    const [type, id] = item.id.split('_');
+    window.navigate(`detail/${type}/${id}`);
+  }
+
+  return (
+    <div className="now-dock">
+      <div className="now-dock__art" onClick={goTo} style={{ cursor: 'pointer' }}>
+        <img src={posterUrl(item)} alt={item.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+        <div className="now-dock__ring"></div>
+      </div>
+      <div className="now-dock__body">
+        <div className="now-dock__title">{item.title}</div>
+        <div className="now-dock__meta">{item.meta || item.year}</div>
+        <div className="now-dock__waves">
+          {[1,2,3,4,5].map(i => <span key={i} style={{ '--i': i }}></span>)}
+        </div>
+      </div>
+      <button className="now-dock__btn now-dock__btn--main" onClick={goTo} aria-label="Resume">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button className="now-dock__expand" onClick={() => setVisible(false)} aria-label="Close">
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // EXPORT TO GLOBAL SCOPE
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1463,15 +1823,25 @@ function TopBar({ active, setActive }) {
  *   etc.
  */
 Object.assign(window, {
-  AmbientBg,        // Animated background component
-  Sidebar,          // Left navigation sidebar
-  TopBar,           // Mobile top bar and bottom navigation
-  Hero,             // Featured banner carousel
-  Row,              // Horizontal scrolling row
-  Card,             // Media item card
-  useBreakpoint,    // Hook for responsive breakpoints
-  useViewport,      // Hook for window size
-  hexA,             // Hex to RGBA converter utility
+  AmbientBg,
+  Sidebar,
+  TopBar,
+  Hero,
+  Row,
+  Card,
+  ScoreGauge,
+  DeviceStrip,
+  MatchBadge,
+  NewPulse,
+  SeasonBadge,
+  StarBadge,
+  MoodRail,
+  PickupSpread,
+  Top10Row,
+  NowDock,
+  useBreakpoint,
+  useViewport,
+  hexA,
 });
 
 
