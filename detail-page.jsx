@@ -1,32 +1,71 @@
 // detail-page.jsx — Movie/TV Show detail page
 
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
+
+// iOS blocks cross-origin iframe autoplay at the WebKit level — detect once
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 function DetailPage({ mediaType, mediaId }) {
   const [item, setItem] = useState(null);
   const [similar, setSimilar] = useState([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
-  const [progress, setProgress] = useState(0); // 0-1, watch progress from database
-  const [progressData, setProgressData] = useState(null); // full DB row
-  const [downloading, setDownloading] = useState(null);  // key of active download
+  const [progress, setProgress] = useState(0);
+  const [progressData, setProgressData] = useState(null);
+  const [downloading, setDownloading] = useState(null);
   const [inList, setInList] = useState(false);
   const [selectedSeason, setSelectedSeason] = useState(1);
   const [seasonDropdownOpen, setSeasonDropdownOpen] = useState(false);
   const [episodes, setEpisodes] = useState([]);
   const [episodesLoading, setEpisodesLoading] = useState(false);
+  const [trailerKey, setTrailerKey] = useState(null);
+  // Desktop: showTrailer swaps the banner to the autoplaying iframe
+  // iOS: showTrailerBtn reveals the Watch Trailer button → trailerOpen opens modal
+  const [showTrailer, setShowTrailer] = useState(false);
+  const [showTrailerBtn, setShowTrailerBtn] = useState(false);
+  const trailerTimerRef = useRef(null);
 
-  // Reset seasons when navigating to a different show
+  // Reset everything when navigating to a different item
   useEffect(() => {
     setSelectedSeason(1);
     setEpisodes([]);
     setSeasonDropdownOpen(false);
+    setTrailerKey(null);
+    setShowTrailer(false);
+    setShowTrailerBtn(false);
+    clearTimeout(trailerTimerRef.current);
   }, [mediaId]);
 
   useEffect(() => {
     loadDetails();
     loadProgress();
     checkInList();
+  }, [mediaType, mediaId]);
+
+  // Fetch trailer, then after 5 s: autoplay in banner (desktop) or show button (iOS)
+  useEffect(() => {
+    if (!mediaId) return;
+    setTrailerKey(null);
+    setShowTrailer(false);
+    setShowTrailerBtn(false);
+    clearTimeout(trailerTimerRef.current);
+    fetch(`${window.API_BASE_URL}/trailer/${mediaType}/${mediaId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.key) {
+          setTrailerKey(d.key);
+          trailerTimerRef.current = setTimeout(() => {
+            if (IS_IOS) {
+              setShowTrailerBtn(true);
+            } else {
+              setShowTrailer(true);
+            }
+          }, 5000);
+        }
+      })
+      .catch(() => {});
+    return () => clearTimeout(trailerTimerRef.current);
   }, [mediaType, mediaId]);
 
   // Load episodes when item is ready or season changes
@@ -146,6 +185,7 @@ function DetailPage({ mediaType, mediaId }) {
         });
         setInList(true);
       }
+      window.clearCacheEntry(`/list?profile_id=${pid}`);
     } catch (error) {
       console.error('Failed to toggle list:', error);
     }
@@ -204,9 +244,49 @@ function DetailPage({ mediaType, mediaId }) {
 
   return (
     <div className="detail-page">
-      {/* Hero Backdrop */}
+      {/* Hero Backdrop / Trailer */}
       <div className="detail-hero" style={{ '--detail-tone': item.tone }}>
-        <img src={item.backdrop || backdropUrl(item)} alt="" className="detail-hero__img" />
+        <img
+          src={item.backdrop_large || item.backdrop || backdropUrl(item)}
+          alt=""
+          className={'detail-hero__img' + (showTrailer ? ' detail-hero__img--hidden' : '')}
+        />
+
+        {/* Trailer iframe — autoplays muted on desktop; tap-to-play inline on iOS */}
+        {showTrailer && trailerKey && (
+          <iframe
+            className={'detail-hero__trailer' + (IS_IOS ? ' detail-hero__trailer--ios' : '')}
+            src={IS_IOS
+              ? `https://www.youtube.com/embed/${trailerKey}?autoplay=0&rel=0&playsinline=1&modestbranding=1`
+              : `https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&rel=0&playsinline=1&modestbranding=1`}
+            allow="autoplay; fullscreen"
+            allowFullScreen
+          />
+        )}
+
+        {/* Dismiss button — shown once trailer is in the banner */}
+        {showTrailer && (
+          <button
+            className="detail-hero__trailer-dismiss"
+            onClick={() => { setShowTrailer(false); clearTimeout(trailerTimerRef.current); }}
+            aria-label="Close trailer"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        )}
+
+        {/* iOS: Watch Trailer button — tapping it swaps backdrop for the iframe */}
+        {showTrailerBtn && !showTrailer && trailerKey && (
+          <button className="detail-hero__trailer-btn" onClick={() => setShowTrailer(true)}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+            Watch Trailer
+          </button>
+        )}
+
         <div className="detail-hero__scrim"></div>
         <div className="detail-hero__tone"></div>
       </div>

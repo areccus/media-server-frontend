@@ -330,12 +330,12 @@ function LibraryPage() {
   async function loadLibrary() {
     setLoading(true);
     try {
-      const cw = await loadContinueWatching();
-      setContinueWatching(cw);
-
-      const pid = window.currentProfileId || 1;
-      const listData = await window.fetchWithCache(`/list?profile_id=${pid}`) || [];
-      setSavedList(listData.map(item => ({
+      const [cw, listData] = await Promise.all([
+        loadContinueWatching(),
+        window.fetchWithCache(`/list?profile_id=${window.currentProfileId || 1}`).catch(() => []),
+      ]);
+      setContinueWatching(cw || []);
+      setSavedList((listData || []).map(item => ({
         id: `${item.media_type}_${item.media_id}`,
         title: item.title,
         poster: item.poster,
@@ -349,14 +349,17 @@ function LibraryPage() {
     }
   }
 
-  if (loading) {
-    return (
-      <PageSpinner label="Library" />
-    );
+  function openItem(item) {
+    const [type, id] = item.id.split('_');
+    navigate(`detail/${type}/${id}`);
   }
+
+  if (loading) return <PageSpinner label="Library" />;
 
   const recent = continueWatching.slice(0, 8);
   const hasMore = continueWatching.length > 8;
+
+  const cwRow = { id: 'cw-lib', label: 'Continue Watching', layout: 'continue', items: recent };
 
   return (
     <div className="library-page">
@@ -370,35 +373,39 @@ function LibraryPage() {
         <h1 className="page-title">My Library</h1>
       </div>
 
-      {recent.length > 0 && (
-        <section className="library-section">
-          <div className="library-section__head">
-            <h2 className="section-title">Continue Watching</h2>
-            {hasMore && (
-              <button className="history-btn" onClick={() => navigate('history')}>
-                History
-                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <path d="m9 6 6 6-6 6"/>
-                </svg>
-              </button>
-            )}
+      <div className="lib-rows">
+        {recent.length > 0 && (
+          <Row row={cwRow} onOpen={openItem} onSeeAll={hasMore ? () => navigate('history') : null}/>
+        )}
+        {savedList.length > 0 && (
+          <section className="lib-section">
+            <div className="lib-section-head">
+              <h2 className="row__title">My List</h2>
+            </div>
+            <div className="lib-portrait-grid">
+              {savedList.map(item => {
+                const [type, id] = item.id.split('_');
+                return (
+                  <button
+                    key={item.id}
+                    className="lib-portrait-card"
+                    onClick={() => navigate(`detail/${type}/${id}`)}
+                  >
+                    <img src={window.posterUrl(item)} alt={item.title} draggable="false" loading="lazy"/>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+        {recent.length === 0 && savedList.length === 0 && (
+          <div className="lib-empty">
+            <div style={{fontSize:48, marginBottom:16}}>🎬</div>
+            <div style={{fontSize:18, fontWeight:700, marginBottom:8}}>Nothing here yet</div>
+            <div style={{fontSize:14, color:'var(--muted)'}}>Start watching something to see it here.</div>
           </div>
-          <div className="history-list">
-            {recent.map(item => <HistoryListItem key={item.id} item={item} />)}
-          </div>
-        </section>
-      )}
-
-      {savedList.length > 0 && (
-        <section className="library-section">
-          <h2 className="section-title">My List</h2>
-          <div className="library-grid library-grid--portrait">
-            {savedList.map(item => (
-              <CategoryCard key={item.id} item={item} glowMode="tone" glowIntensity={1.7} cardRadius={21} />
-            ))}
-          </div>
-        </section>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -408,14 +415,17 @@ function HistoryPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadContinueWatching().then(data => { setItems(data); setLoading(false); }).catch(() => setLoading(false));
+    loadContinueWatching().then(data => { setItems(data || []); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
-  if (loading) {
-    return (
-      <PageSpinner label="History" />
-    );
+  function openItem(item) {
+    const [type, id] = item.id.split('_');
+    navigate(`detail/${type}/${id}`);
   }
+
+  if (loading) return <PageSpinner label="History" />;
+
+  const histRow = { id: 'hist-all', label: 'Watch History', layout: 'continue', items };
 
   return (
     <div className="library-page">
@@ -429,17 +439,17 @@ function HistoryPage() {
         <h1 className="page-title">Watch History</h1>
       </div>
 
-      {items.length === 0 ? (
-        <div style={{ padding: '60px var(--gutter)', textAlign: 'center', color: 'var(--txt-1)' }}>
-          Nothing watched yet.
-        </div>
-      ) : (
-        <section className="library-section">
-          <div className="history-list">
-            {items.map(item => <HistoryListItem key={item.id} item={item} />)}
+      <div className="lib-rows">
+        {items.length === 0 ? (
+          <div className="lib-empty">
+            <div style={{fontSize:48, marginBottom:16}}>🎬</div>
+            <div style={{fontSize:18, fontWeight:700, marginBottom:8}}>Nothing watched yet</div>
+            <div style={{fontSize:14, color:'var(--muted)'}}>Start watching something to see it here.</div>
           </div>
-        </section>
-      )}
+        ) : (
+          <Row row={histRow} onOpen={openItem}/>
+        )}
+      </div>
     </div>
   );
 }
@@ -512,55 +522,360 @@ function GenreRow({ genreName, items }) {
   );
 }
 
-function GenrePage({ type, title }) {
-  const [genresData, setGenresData] = useState({});
+const GENRE_CFG = {
+  movies: { label: 'Movies',   endpoint: '/movies/genres' },
+  tv:     { label: 'TV Shows', endpoint: '/tv/genres'     },
+  anime:  { label: 'Anime',    endpoint: '/anime/genres'  },
+  kids:   { label: 'Kids',     endpoint: '/kids/genres'   },
+};
+
+// Renders a single genre row only once it scrolls near the viewport
+function LazyGenreRow({ genreName, items, onOpen, mediaType }) {
+  const wrapRef = useRef(null);
+  const [revealed, setRevealed] = useState(false);
+
+  React.useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    // Rows already near the viewport reveal instantly (before paint) — no flash
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight + 300) {
+      setRevealed(true);
+      return;
+    }
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setRevealed(true); obs.disconnect(); } },
+      { rootMargin: '200px 0px' }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const row = { id: `g-${genreName}`, label: genreName, layout: 'portrait', items };
+  const seeAll = mediaType
+    ? () => navigate(`genre/${mediaType}/${encodeURIComponent(genreName)}`)
+    : null;
+
+  return (
+    <div ref={wrapRef} className={'lazy-genre-row' + (revealed ? ' is-revealed' : '')}>
+      {revealed ? (
+        <Row row={row} onOpen={onOpen} onSeeAll={seeAll}/>
+      ) : (
+        <div className="lazy-genre-row__skeleton">
+          <div className="lazy-genre-row__sk-title"/>
+          <div className="lazy-genre-row__sk-cards">
+            {[0,1,2,3,4,5].map(i => <div key={i} className="lazy-genre-row__sk-card"/>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GenrePage({ mediaType, initialGenre }) {
+  const cfg = GENRE_CFG[mediaType] || GENRE_CFG.movies;
+  const [genreData, setGenreData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const sectionRefs = useRef({});
 
   useEffect(() => {
-    loadGenres();
-  }, [type]);
-
-  async function loadGenres() {
     setLoading(true);
-    try {
-      let endpoint = '';
-      if (type === 'movies') endpoint = '/movies/genres';
-      else if (type === 'tv') endpoint = '/tv/genres';
-      else if (type === 'anime') endpoint = '/anime/genres';
-
-      const data = await window.fetchWithCache(endpoint);
-      setGenresData(data);
-    } catch (error) {
-      console.error('Failed to load genres:', error);
-    } finally {
+    window.fetchWithCache(cfg.endpoint).then(data => {
+      setGenreData(data || {});
       setLoading(false);
-    }
-  }
+    }).catch(() => setLoading(false));
+  }, [mediaType]);
 
-  if (loading) {
-    return (
-      <PageSpinner label={title} />
-    );
+  // Scroll to the target genre row if coming from a chip click
+  useEffect(() => {
+    if (!initialGenre || !genreData || loading) return;
+    setTimeout(() => {
+      const el = sectionRefs.current[initialGenre];
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }, [initialGenre, genreData, loading]);
+
+  function openItem(item) {
+    const [t, id] = (item.id || '').split('_');
+    navigate(`detail/${t}/${id}`);
   }
 
   return (
     <div className="genre-page">
-      <div className="genre-header">
+      <div className="genre-page-head">
         <button className="back-button" onClick={() => navigate('home')}>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="m15 6-6 6 6 6"/>
           </svg>
           Back to Home
         </button>
-        <h1 className="page-title">{title}</h1>
+        <h1 className="page-title">{cfg.label}</h1>
       </div>
 
-      <div className="genre-sections">
-        {Object.entries(genresData).map(([genreName, items]) => (
-          items.length > 0 && (
-            <GenreRow key={genreName} genreName={genreName} items={items} />
-          )
-        ))}
+      {loading ? <PageSpinner label={cfg.label}/> : (
+        <div className="genre-sections">
+          {Object.entries(genreData || {}).map(([genreName, items]) =>
+            items.length > 0 && (
+              <div key={genreName} ref={el => sectionRefs.current[genreName] = el}>
+                <LazyGenreRow genreName={genreName} items={items} onOpen={openItem}/>
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sports Page
+// ─────────────────────────────────────────────────────────────────────────────
+
+const LEAGUE_TONE = { nba: '#E8853A', nfl: '#3A9E5A', boxing: '#E84040' };
+
+function SportsPage() {
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const timerRef = useRef(null);
+
+  function fmtTime(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString([], {
+        weekday: 'short', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit',
+      });
+    } catch (_) { return ''; }
+  }
+
+  function toItems(games, league) {
+    return (games || []).map(g => ({
+      ...g,
+      id: g.id || `${league}-${g.away_team_abbrev}-${g.home_team_abbrev}`,
+      tone: LEAGUE_TONE[league] || '#555',
+      _timeLabel: fmtTime(g.start_time),
+      league,
+    }));
+  }
+
+  async function loadAll() {
+    try {
+      const [r1, r2, r3] = await Promise.all([
+        fetch(`${window.API_BASE_URL}/sports/live?league=nba`).then(r => r.json()).catch(() => ({})),
+        fetch(`${window.API_BASE_URL}/sports/live?league=nfl`).then(r => r.json()).catch(() => ({})),
+        fetch(`${window.API_BASE_URL}/sports/live?league=boxing`).then(r => r.json()).catch(() => ({})),
+      ]);
+
+      const nbaItems    = toItems(r1.success ? r1.data : [], 'nba');
+      const nflItems    = toItems(r2.success ? r2.data : [], 'nfl');
+      const boxingItems = toItems(r3.success ? r3.data : [], 'boxing');
+      const liveItems   = [...nbaItems, ...nflItems, ...boxingItems].filter(g => g.status_state === 'in');
+
+      const built = [];
+      if (liveItems.length)   built.push({ id: 'live-now', label: '🔴 Live Now', layout: 'sport', items: liveItems });
+      if (nbaItems.length)    built.push({ id: 'nba',      label: '🏀 NBA',       layout: 'sport', items: nbaItems });
+      if (nflItems.length)    built.push({ id: 'nfl',      label: '🏈 NFL',       layout: 'sport', items: nflItems });
+      if (boxingItems.length) built.push({ id: 'boxing',   label: '🥊 Boxing',    layout: 'sport', items: boxingItems });
+
+      setRows(built);
+    } catch (_) {
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadAll();
+    timerRef.current = setInterval(loadAll, 60000);
+    return () => clearInterval(timerRef.current);
+  }, []);
+
+  function openGame(game) {
+    window._sportDetail = game;
+    window.navigate(`sport/${game.id}`);
+  }
+
+  if (loading) return <PageSpinner label="Loading sports…"/>;
+
+  if (!rows.length) {
+    return (
+      <div style={{textAlign:'center', padding:'80px 24px', color:'rgba(255,255,255,.3)'}}>
+        <div style={{fontSize:64, marginBottom:16}}>🏆</div>
+        <div style={{fontSize:18, fontWeight:600, marginBottom:8, color:'rgba(255,255,255,.5)'}}>No games scheduled</div>
+        <div style={{fontSize:13}}>Check back on game day</div>
+      </div>
+    );
+  }
+
+  return (
+    <React.Fragment>
+      {rows.map(row => <Row key={row.id} row={row} onOpen={openGame}/>)}
+    </React.Fragment>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sport Detail Page
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SportDetailPage({ gameId }) {
+  const game = window._sportDetail || null;
+  const [streamLoading, setStreamLoading] = useState(false);
+  const [streamError, setStreamError] = useState(null);
+
+  // If somehow we land here without game data (direct URL), show a fallback
+  if (!game) {
+    return (
+      <div style={{textAlign:'center', padding:'120px 24px', color:'rgba(255,255,255,.4)'}}>
+        <div style={{fontSize:48, marginBottom:16}}>🏆</div>
+        <div style={{fontSize:18, fontWeight:600, marginBottom:12, color:'rgba(255,255,255,.6)'}}>Game not found</div>
+        <button onClick={() => window.navigate('home')}
+          style={{background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.15)',
+                  color:'#fff', padding:'10px 24px', borderRadius:99, cursor:'pointer', fontFamily:'inherit', fontSize:14}}>
+          ← Back
+        </button>
+      </div>
+    );
+  }
+
+  const isLive = game.status_state === 'in';
+  const tone   = game.tone || LEAGUE_TONE[(game.league || '').toLowerCase()] || '#555';
+
+  function watchGame() {
+    if (!game.stream_url) return;
+    const title = `${game.away_team} vs ${game.home_team}`;
+    window.location.href = `/player.html?type=sports&id=${game.id}&title=${encodeURIComponent(title)}&src=${encodeURIComponent(game.stream_url)}`;
+  }
+
+  const LeagueBadge = ({ league }) => {
+    const icons = { NBA: '🏀', NFL: '🏈', BOXING: '🥊' };
+    return (
+      <span style={{display:'inline-flex', alignItems:'center', gap:6,
+                    fontSize:12, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase',
+                    color:'rgba(255,255,255,.5)'}}>
+        {icons[(league||'').toUpperCase()] || '🏆'} {league}
+      </span>
+    );
+  };
+
+  const TeamBlock = ({ logo, name, abbrev }) => {
+    const [err, setErr] = useState(false);
+    return (
+      <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:14, flex:1}}>
+        {logo && !err
+          ? <img src={logo} alt={abbrev} onError={() => setErr(true)}
+              style={{width:clamp(80,120), height:clamp(80,120), objectFit:'contain',
+                      filter:'drop-shadow(0 4px 20px rgba(0,0,0,.5))'}}/>
+          : <div style={{width:100, height:100, borderRadius:16,
+                          background:'rgba(255,255,255,.07)',
+                          display:'flex', alignItems:'center', justifyContent:'center', fontSize:44}}>
+              {LEAGUE_ICONS_MAP[(game.league||'').toLowerCase()] || '🏆'}
+            </div>}
+        <div style={{fontSize:15, fontWeight:700, textAlign:'center', letterSpacing:'.02em',
+                     color:'rgba(255,255,255,.85)', maxWidth:140, lineHeight:1.3}}>{name}</div>
+        {abbrev && abbrev !== name &&
+          <div style={{fontSize:11, fontWeight:600, color:'rgba(255,255,255,.35)',
+                       letterSpacing:'.06em', textTransform:'uppercase'}}>{abbrev}</div>}
+      </div>
+    );
+  };
+
+  function clamp(min, max) { return `clamp(${min}px, 10vw, ${max}px)`; }
+
+  return (
+    <div style={{minHeight:'80vh', padding:'0 0 80px'}}>
+      {/* Tone gradient background */}
+      <div style={{position:'fixed', inset:0, zIndex:-1, pointerEvents:'none',
+                   background:`radial-gradient(ellipse 100% 60% at 50% 0%, ${tone}28 0%, transparent 60%)`}}/>
+
+      {/* Back button */}
+      <div style={{padding:'28px var(--gutter) 0'}}>
+        <button onClick={() => window.navigate('home')}
+          style={{display:'inline-flex', alignItems:'center', gap:8,
+                  background:'none', border:'none', color:'rgba(255,255,255,.55)',
+                  fontSize:14, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
+                  padding:'6px 0', letterSpacing:'.02em'}}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="m15 6-6 6 6 6"/>
+          </svg>
+          Sports
+        </button>
+      </div>
+
+      <div style={{maxWidth:960, margin:'0 auto', padding:'48px var(--gutter) 0'}}>
+        {/* League + status */}
+        <div style={{display:'flex', alignItems:'center', gap:12, marginBottom:32}}>
+          <LeagueBadge league={game.league}/>
+          {isLive
+            ? <span style={{fontSize:11, fontWeight:800, letterSpacing:'.1em', textTransform:'uppercase',
+                             color:'#ff4848', background:'rgba(255,50,50,.14)',
+                             border:'1px solid rgba(255,50,50,.28)', borderRadius:5,
+                             padding:'3px 8px', animation:'sport-pulse 2s ease-in-out infinite'}}>
+                ● LIVE
+              </span>
+            : game._timeLabel &&
+              <span style={{fontSize:13, color:'rgba(255,255,255,.4)', fontWeight:500}}>
+                {game._timeLabel}
+              </span>}
+        </div>
+
+        {/* Matchup */}
+        <div style={{display:'flex', alignItems:'center', justifyContent:'center',
+                     gap:'clamp(24px, 6vw, 80px)', marginBottom:48}}>
+          <TeamBlock logo={game.away_logo} name={game.away_team} abbrev={game.away_team_abbrev}/>
+          <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:12, flexShrink:0}}>
+            {isLive && game.score
+              ? <div style={{fontSize:'clamp(40px, 7vw, 72px)', fontWeight:900,
+                              letterSpacing:'-.04em', lineHeight:1, textShadow:'0 4px 24px rgba(0,0,0,.4)'}}>
+                  {game.score}
+                </div>
+              : <div style={{fontSize:'clamp(28px, 5vw, 52px)', fontWeight:800,
+                              color:'rgba(255,255,255,.18)'}}>VS</div>}
+            {isLive &&
+              <div style={{fontSize:12, color:'rgba(255,255,255,.4)', fontWeight:500}}>
+                {game.status || ''}
+              </div>}
+          </div>
+          <TeamBlock logo={game.home_logo} name={game.home_team} abbrev={game.home_team_abbrev}/>
+        </div>
+
+        {/* Play button */}
+        <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:14}}>
+          {game.stream_url
+            ? <button onClick={watchGame}
+                style={{display:'inline-flex', alignItems:'center', gap:10,
+                        background:'#fff', color:'#000',
+                        border:'none', borderRadius:99, cursor:'pointer',
+                        fontFamily:'inherit', fontSize:16, fontWeight:700,
+                        padding:'16px 40px', letterSpacing:'.02em',
+                        boxShadow:`0 0 32px ${tone}55`}}>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+                {isLive ? 'Watch Live' : 'Watch'}
+              </button>
+            : <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:12}}>
+                {game.broadcast &&
+                  <div style={{fontSize:13, color:'rgba(255,255,255,.45)', fontWeight:500,
+                                display:'flex', alignItems:'center', gap:6}}>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 6l11 7 11-7"/><rect x="1" y="6" width="22" height="13" rx="2"/></svg>
+                    On {game.broadcast}
+                  </div>}
+                <a href={`https://www.espn.com/nba/game/_/gameId/${game.espn_id || game.id}`}
+                   target="_blank" rel="noopener noreferrer"
+                   style={{display:'inline-flex', alignItems:'center', gap:8,
+                           background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.7)',
+                           border:'1px solid rgba(255,255,255,.15)', borderRadius:99, cursor:'pointer',
+                           fontFamily:'inherit', fontSize:14, fontWeight:600,
+                           padding:'12px 28px', letterSpacing:'.02em', textDecoration:'none'}}>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  Watch on ESPN
+                </a>
+              </div>}
+          {streamError &&
+            <div style={{fontSize:13, color:'rgba(255,100,100,.7)'}}>{streamError}</div>}
+        </div>
       </div>
     </div>
   );
@@ -572,5 +887,9 @@ Object.assign(window, {
   LibraryPage,
   HistoryPage,
   GenreRow,
-  GenrePage
+  LazyGenreRow,
+  GenrePage,
+  SportsPage,
+  SportDetailPage,
+  GENRE_CFG,
 });

@@ -23,11 +23,28 @@
     }
 
     /* ── Wrapper ─────────────────────────────────────────────────────── */
+    /* Always fixed so it fills the exact visible area regardless of
+       browser chrome, safe areas, or orientation state mid-transition.   */
     #wrap {
-      position:relative;
-      width:100vw; height:100vh;
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
     }
     #wrap.hide-cursor { cursor:none; }
+
+    /* Portrait rotation is applied via JS (see _applyOrientation) so we
+       can handle all four device angles precisely.
+       When #wrap has .rotated the player is CSS-rotated to appear landscape. */
+    #wrap.rotated {
+      /* Dimensions swapped: width←vh, height←vw, centred over viewport */
+      width:  100vh;
+      height: 100vw;
+      top:    calc((100vh - 100vw) / 2);
+      left:   calc((100vw - 100vh) / 2);
+      right:  auto;
+      bottom: auto;
+      /* direction set inline by JS (-90deg or 90deg) */
+    }
 
     /* ── Video ────────────────────────────────────────────────────────── */
     #vid {
@@ -53,7 +70,7 @@
     /* ── Top bar ──────────────────────────────────────────────────────── */
     #top {
       top:0;
-      padding:18px 20px 40px;
+      padding:max(18px, env(safe-area-inset-top)) 20px 40px;
       background:linear-gradient(to bottom, rgba(6,8,12,.9) 0%, transparent 100%);
       display:flex;
       align-items:center;
@@ -161,6 +178,16 @@
       #ctrl-c   { display:none; }   /* hide title — no room               */
       #time     { font-size:11px; padding:0 2px; }
     }
+
+    /* ── When #wrap is rotated (portrait → landscape CSS trick), undo the
+          mobile compact styles — the rotated player is visually wide ──── */
+    #wrap.rotated .ibtn    { width:38px; height:38px; }
+    #wrap.rotated #time    { font-size:12.5px; padding:0 4px; }
+    #wrap.rotated #ctrl-c  { display:flex; }
+    #wrap.rotated #bot     { padding: 0 16px max(12px, env(safe-area-inset-bottom)) 16px; }
+    #wrap.rotated #ctrl    { gap:8px; }
+    #wrap.rotated #ctrl-l  { gap:4px; }
+    #wrap.rotated #ctrl-r  { gap:4px; }
 
     /* ── Icon buttons ─────────────────────────────────────────────────── */
     .ibtn {
@@ -343,6 +370,13 @@
     #load-sub  { font-size:12px; color:rgba(255,255,255,.28); }
     #prog-wrap { width:180px; height:2px; background:rgba(255,255,255,.08); border-radius:1px; overflow:hidden; }
     #prog-bar  { height:100%; background:#5BB7FF; border-radius:1px; width:0%; }
+    .load-back-btn {
+      margin-top:8px; display:flex; align-items:center; gap:6px;
+      background:none; border:1px solid rgba(255,255,255,.14); border-radius:20px;
+      color:rgba(255,255,255,.45); font:inherit; font-size:13px; padding:7px 16px;
+      cursor:pointer; transition:color .2s, border-color .2s;
+    }
+    .load-back-btn:hover { color:rgba(255,255,255,.85); border-color:rgba(255,255,255,.35); }
 
     /* ── Error screen ─────────────────────────────────────────────────── */
     #err {
@@ -586,6 +620,12 @@
     <div id="load-msg">Extracting stream…</div>
     <div id="prog-wrap"><div id="prog-bar"></div></div>
     <div id="load-sub">First load takes ~15 s — cached after that</div>
+    <button class="load-back-btn" onclick="goBack()">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+        <path d="m15 6-6 6 6 6"/>
+      </svg>
+      Go Back
+    </button>
   </div>
 
   <!-- Error -->
@@ -743,7 +783,8 @@ function applySeek(pct) {
   seekThumb.style.left = `${pct * 100}%`;
 }
 function commitSeek(pct) {
-  if (vid.duration) vid.currentTime = pct * vid.duration;
+  const dur = _knownDuration || vid.duration;
+  if (dur) vid.currentTime = pct * dur;
 }
 
 seekWrap.addEventListener('mousedown', e => { dragging = true; commitSeek(pctFromEvent(e)); });
@@ -754,8 +795,9 @@ document.addEventListener('touchmove',  e => { if (dragging) commitSeek(pctFromE
 document.addEventListener('touchend',   () => { dragging = false; });
 
 vid.addEventListener('progress', () => {
-  if (!vid.duration || !vid.buffered.length) return;
-  seekBuf.style.width = `${(vid.buffered.end(vid.buffered.length - 1) / vid.duration) * 100}%`;
+  const dur = _knownDuration || vid.duration;
+  if (!dur || !vid.buffered.length) return;
+  seekBuf.style.width = `${(vid.buffered.end(vid.buffered.length - 1) / dur) * 100}%`;
 });
 
 const timeEl = document.getElementById('time');
@@ -767,9 +809,10 @@ function fmt(s) {
     : `${m}:${String(ss).padStart(2,'0')}`;
 }
 vid.addEventListener('timeupdate', () => {
-  if (!dragging && vid.duration) {
-    applySeek(vid.currentTime / vid.duration);
-    timeEl.textContent = `${fmt(vid.currentTime)} / ${fmt(vid.duration)}`;
+  const dur = _knownDuration || vid.duration;
+  if (!dragging && dur) {
+    applySeek(vid.currentTime / dur);
+    timeEl.textContent = `${fmt(vid.currentTime)} / ${fmt(dur)}`;
   }
 
   // Accumulate real watched seconds (ignore seeks: only count small forward steps)
@@ -831,18 +874,68 @@ volRange.addEventListener('input', () => {
   syncVolIcons();
 });
 
+// ── Orientation lock (JS-driven, handles all 4 device angles) ────────────────
+const _isIOS  = /iphone|ipad|ipod/i.test(navigator.userAgent);
+
+function _applyOrientation() {
+  // window.orientation: 0=portrait-up, 180=portrait-down, 90=landscape-right, -90=landscape-left
+  // We want the player to ALWAYS appear landscape.
+  // In true landscape (±90°) no rotation needed — just fill the screen normally.
+  // In portrait (0° or 180°) we rotate #wrap so it appears landscape.
+  const angle = typeof window.orientation === 'number' ? window.orientation : 0;
+  const isPortrait = angle === 0 || angle === 180;
+
+  if (isPortrait) {
+    // Rotate in the direction that feels natural for the given portrait angle.
+    // 0° (normal portrait)       → rotate -90deg (landscape-right feel)
+    // 180° (upside-down portrait) → rotate +90deg
+    const deg = angle === 180 ? 90 : -90;
+    wrap.classList.add('rotated');
+    wrap.style.transform = `rotate(${deg}deg)`;
+  } else {
+    wrap.classList.remove('rotated');
+    wrap.style.transform = '';
+    // In real landscape, reset inset so we fill the whole visible area.
+    wrap.style.width  = '';
+    wrap.style.height = '';
+    wrap.style.top    = '';
+    wrap.style.left   = '';
+  }
+}
+
+// Run immediately then on every orientation change.
+_applyOrientation();
+window.addEventListener('orientationchange', () => {
+  // Give iOS a moment to update window.orientation and re-flow the viewport.
+  setTimeout(_applyOrientation, 50);
+});
+
 // ── Fullscreen ────────────────────────────────────────────────────────────
 const icFsOn  = document.getElementById('ic-fs-on');
 const icFsOff = document.getElementById('ic-fs-off');
 
-function toggleFS() {
-  document.fullscreenElement ? document.exitFullscreen() : wrap.requestFullscreen();
+function updateFSIcons(fs) {
+  const active = fs !== undefined ? fs : !!(document.fullscreenElement || document.webkitFullscreenElement);
+  icFsOn.style.display  = active ? 'none'  : 'block';
+  icFsOff.style.display = active ? 'block' : 'none';
 }
-document.addEventListener('fullscreenchange', () => {
-  const fs = !!document.fullscreenElement;
-  icFsOn.style.display  = fs ? 'none'  : 'block';
-  icFsOff.style.display = fs ? 'block' : 'none';
-});
+
+function toggleFS() {
+  if (document.fullscreenElement || document.webkitFullscreenElement) {
+    (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+  } else if (wrap.requestFullscreen) {
+    wrap.requestFullscreen();
+  } else if (wrap.webkitRequestFullscreen) {
+    wrap.webkitRequestFullscreen();
+  } else if (vid.webkitEnterFullscreen) {
+    // iOS Safari: enters native fullscreen with built-in scrub bar and ±10s skip
+    vid.webkitEnterFullscreen();
+  }
+}
+document.addEventListener('fullscreenchange', () => updateFSIcons());
+document.addEventListener('webkitfullscreenchange', () => updateFSIcons());
+vid.addEventListener('webkitbeginfullscreen', () => updateFSIcons(true));
+vid.addEventListener('webkitendfullscreen', () => updateFSIcons(false));
 
 // ── Buffering indicator ───────────────────────────────────────────────────
 const bufEl = document.getElementById('buf');
@@ -851,13 +944,37 @@ vid.addEventListener('playing', () => bufEl.classList.remove('on'));
 vid.addEventListener('canplay', () => bufEl.classList.remove('on'));
 
 // ── Video error handler ───────────────────────────────────────────────────
-// Catches codec decode failures and unsupported formats (e.g. MKV on iOS Safari)
-vid.addEventListener('error', () => {
+let _noCache = false; // true after first nocache retry — prevents infinite loop
+vid.addEventListener('error', async () => {
   const e = vid.error;
   const code = e ? e.code : 0;
   const msgs = { 1: 'Load aborted', 2: 'Network error', 3: 'Decode error — codec may be unsupported on this device', 4: 'Format not supported on this device' };
   const detail = msgs[code] || `Media error ${code}`;
   if (activeHls) { activeHls.destroy(); activeHls = null; }
+
+  // Codes 2/3/4: URL may be stale, or the proxy returned JSON instead of a stream.
+  // Re-request with nocache=1 to force a fresh extraction before giving up.
+  if ((code === 2 || code === 3 || code === 4) && !_noCache && mediaType && mediaId) {
+    _noCache = true;
+    console.warn(`vid error ${code} — retrying with nocache=1`);
+    document.getElementById('loading').style.display = 'flex';
+    document.getElementById('load-msg').textContent  = 'Refreshing stream…';
+    document.getElementById('load-sub').textContent  = 'URL may have expired — fetching fresh link';
+    try {
+      const qs = new URLSearchParams({ nocache: '1' });
+      if (season)  qs.set('season',  season);
+      if (episode) qs.set('episode', episode);
+      if (imdbId)  qs.set('imdbId',  imdbId);
+      const res  = await fetch(`${API}/stream/${mediaType}/${mediaId}?${qs}`);
+      const data = await res.json();
+      if (data.success && data.data?.stream_url) {
+        loadStream(data.data.stream_url, data.data.filename || '', _resumeAt, data.data.duration || 0);
+        return;
+      }
+    } catch (_) {}
+    document.getElementById('loading').style.display = 'none';
+  }
+
   showError(`Playback failed: ${detail}\n\nTry the VidSrc embed as a fallback.`);
 });
 
@@ -880,6 +997,7 @@ document.addEventListener('keydown', e => {
 let activeHls = null;
 let _cfHint = null;
 let _resumeAt = 0; // seconds to seek after video metadata loads
+let _knownDuration = 0; // real duration from ffprobe (overrides vid.duration for fMP4 streams)
 
 // ── Episode watched tracking ───────────────────────────────────────────────
 // An episode counts as "watched" after 5 continuous minutes of real playback.
@@ -1040,21 +1158,32 @@ function useEmbed() {
 }
 
 // ── HLS.js / native loader ────────────────────────────────────────────────
-function loadStream(url, filename, resumeAt) {
+function loadStream(url, filename, resumeAt, duration) {
+  if (duration > 0) _knownDuration = duration;
   clearTimeout(_cfHint);
   finishProgress();
   document.getElementById('loading').style.display = 'none';
   showCtrls();
+  if (isEp) setTimeout(prefetchNextEpisode, 60_000);
 
   const isHLS = url.includes('.m3u8');
-  // Always proxy — fixes content-type, remuxes MKV→MP4 for iOS, rewrites m3u8 segments.
-  const proxyParams = new URLSearchParams({ url });
-  if (filename) proxyParams.set('filename', filename);
-  // For remuxed streams, tell FFmpeg where to start so there's no seek delay
-  if (resumeAt && resumeAt > 4 && filename && filename.toLowerCase().endsWith('.mkv')) {
-    proxyParams.set('t', Math.floor(resumeAt));
+
+  let srcUrl;
+  if (url.includes('/api/stream/proxy')) {
+    // Already a proxy URL from the backend — use it directly to avoid double-wrapping.
+    srcUrl = url;
+    if (resumeAt && resumeAt > 4 && filename && filename.toLowerCase().endsWith('.mkv')) {
+      srcUrl += (srcUrl.includes('?') ? '&' : '?') + 't=' + Math.floor(resumeAt);
+    }
+  } else {
+    // Raw URL — wrap in proxy (fixes content-type, remuxes MKV→MP4, rewrites m3u8 segments).
+    const proxyParams = new URLSearchParams({ url });
+    if (filename) proxyParams.set('filename', filename);
+    if (resumeAt && resumeAt > 4 && filename && filename.toLowerCase().endsWith('.mkv')) {
+      proxyParams.set('t', Math.floor(resumeAt));
+    }
+    srcUrl = `${API}/stream/proxy?${proxyParams}`;
   }
-  const srcUrl = `${API}/stream/proxy?${proxyParams}`;
 
   if (isHLS && Hls.isSupported()) {
     const hls = new Hls({
@@ -1090,7 +1219,8 @@ function loadStream(url, filename, resumeAt) {
 
 // ── Progress saving ───────────────────────────────────────────────────────
 async function saveProgress() {
-  if (!vid.duration || vid.duration < 1 || vid.currentTime < 2) return;
+  const dur = _knownDuration || vid.duration;
+  if (!dur || dur < 1 || vid.currentTime < 2) return;
   try {
     await fetch(`${API}/progress/save`, {
       method: 'POST',
@@ -1104,7 +1234,7 @@ async function saveProgress() {
         backdrop,
         tone,
         current_time: vid.currentTime,
-        duration:     vid.duration,
+        duration:     dur,
         season:       season  || 0,
         episode:      episode || 0,
         quality:      activeHls ? (activeHls.levels[activeHls.currentLevel]?.height + 'p' || '1080p') : '1080p'
@@ -1150,13 +1280,47 @@ async function tryCaptchaRelay() {
     const data2 = await res2.json();
     if (data2.success && data2.data?.stream_url) {
       console.log('Captcha relay succeeded — loading stream');
-      loadStream(data2.data.stream_url, data2.data.filename || '');
+      loadStream(data2.data.stream_url, data2.data.filename || '', 0, data2.data.duration || 0);
       return true;
     }
   } catch (e) {
     console.warn('captcha relay error:', e);
   }
   return false;
+}
+
+// ── Next-episode prefetch ─────────────────────────────────────────────────
+// After playback starts, silently warm the stream cache for the next episode
+// so the user gets an instant cache-hit instead of a 15-20 s extraction wait.
+let _prefetchFired = false;
+
+function prefetchNextEpisode() {
+  if (_prefetchFired || !isEp) return;
+  _prefetchFired = true;
+
+  // Determine next target: same season next ep, or next season ep1
+  let nextSeason  = season;
+  let nextEpisode = episode + 1;
+  if (totalEps > 0 && episode >= totalEps) {
+    nextSeason  = season + 1;
+    nextEpisode = 1;
+  }
+
+  const qs = new URLSearchParams({ season: nextSeason, episode: nextEpisode });
+  if (imdbId) qs.set('imdbId', imdbId);
+
+  console.log(`[prefetch] warming S${nextSeason}E${nextEpisode} stream cache…`);
+
+  fetch(`${API}/stream/${mediaType}/${mediaId}?${qs}`)
+    .then(r => r.json())
+    .then(d => {
+      if (d.success) {
+        console.log(`[prefetch] S${nextSeason}E${nextEpisode} ready — source: ${d.data?.source}${d.cached ? ' (was already cached)' : ''}`);
+      } else {
+        console.log(`[prefetch] S${nextSeason}E${nextEpisode} failed: ${d.error}`);
+      }
+    })
+    .catch(e => console.log('[prefetch] fetch error:', e));
 }
 
 // ── Main init ─────────────────────────────────────────────────────────────
@@ -1210,7 +1374,7 @@ async function init() {
       }
     }
 
-    loadStream(data.data.stream_url, data.data.filename || '', resumeAt);
+    loadStream(data.data.stream_url, data.data.filename || '', resumeAt, data.data.duration || 0);
 
     // For non-MKV streams, seek via currentTime after metadata loads
     if (resumeAt > 4) {

@@ -37,6 +37,22 @@ function parseRoute(hash) {
     };
   }
 
+  // Parse sport detail: sport/{gameId}
+  if (page === 'sport' && parts.length === 2) {
+    return { page: 'sport', params: { gameId: parts[1] } };
+  }
+
+  // Parse genre pages: genre/movies or genre/movies/Action
+  if (page === 'genre' && parts.length >= 2) {
+    return {
+      page: 'genre',
+      params: {
+        mediaType: parts[1],
+        genreName: parts[2] ? decodeURIComponent(parts[2]) : null
+      }
+    };
+  }
+
   return {
     page: page,
     params: parts.slice(1)

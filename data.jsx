@@ -106,31 +106,31 @@ let API_BASE_URL = `http://${CURRENT_HOST}:5000/api`;
  * Timeout: 1 second per port (don't wait too long)
  */
 async function detectBackendPort() {
-  // Try each port in order
+  // When served over HTTPS (Cloudflare tunnel or production), nginx proxies
+  // /api/ on the same origin — no port scanning needed
+  if (window.location.protocol === 'https:') {
+    API_BASE_URL = `${window.location.origin}/api`;
+    console.log(`✅ HTTPS detected — using same-origin API: ${API_BASE_URL}`);
+    return true;
+  }
+
+  // Local dev: scan ports to find Flask
   for (const port of BACKEND_PORTS) {
     try {
-      // Make health check request with 1-second timeout
-      // AbortSignal.timeout(1000) = give up after 1000ms (1 second)
       const response = await fetch(`http://${CURRENT_HOST}:${port}/api/health`, {
         method: 'GET',
-        signal: AbortSignal.timeout(1000)  // Timeout after 1 second
+        signal: AbortSignal.timeout(1000)
       });
-
-      // Check if response is successful (status 200-299)
       if (response.ok) {
-        // Found it! Update global API_BASE_URL
         API_BASE_URL = `http://${CURRENT_HOST}:${port}/api`;
         console.log(`✅ Connected to backend on ${CURRENT_HOST}:${port}`);
-        return true;  // Success!
+        return true;
       }
     } catch (error) {
-      // Port not available or timed out - try next port
-      // Don't log error here, we expect some ports to fail
       continue;
     }
   }
 
-  // No backend found on any port
   console.warn('⚠️ Could not connect to backend. Using fallback data.');
   return false;
 }
@@ -188,6 +188,11 @@ function lsGet(endpoint) {
 }
 function lsSet(endpoint, data) {
   try { localStorage.setItem(LS_PREFIX + endpoint, JSON.stringify({ ts: Date.now(), data })); } catch {}
+}
+function clearCacheEntry(endpoint) {
+  delete apiCache.data[endpoint];
+  delete apiCache.timestamps[endpoint];
+  try { localStorage.removeItem(LS_PREFIX + endpoint); } catch {}
 }
 
 
@@ -684,6 +689,7 @@ Object.assign(window, {
   landscapeUrl,       // Landscape URL function
   initializeData,     // Data loading function
   fetchWithCache,     // Cached fetch function
+  clearCacheEntry,    // Invalidate a single cache entry
   API_BASE_URL        // Current backend URL
 });
 
