@@ -716,11 +716,6 @@
 
 </div><!-- /wrap -->
 
-<!-- Hidden captcha frame — loads cloudnestra rcp page through our proxy so the
-     browser auto-solves Turnstile and we capture the _rcp token server-side -->
-<iframe id="captcha-frame" style="position:fixed;bottom:0;right:0;width:300px;height:65px;
-  border:none;opacity:0;pointer-events:none;z-index:-1;" aria-hidden="true"></iframe>
-
 <!-- Persistent exit overlay — activated by useEmbed(), survives wrap.innerHTML swap -->
 <div id="embed-exit-overlay">
   <div id="embed-exit-zone"></div>
@@ -1151,7 +1146,6 @@ document.addEventListener('keydown', e => {
 
 // ── Quality menu ──────────────────────────────────────────────────────────
 let activeHls = null;
-let _cfHint = null;
 let _slowHint = null;
 let _resumeAt = 0; // seconds to seek after video metadata loads
 let _knownDuration = 0; // real duration from ffprobe (overrides vid.duration for fMP4 streams)
@@ -1380,7 +1374,6 @@ function useEmbed() {
 // ── HLS.js / native loader ────────────────────────────────────────────────
 function loadStream(url, filename, resumeAt, duration) {
   if (duration > 0) _knownDuration = duration;
-  clearTimeout(_cfHint);
   clearTimeout(_slowHint);
   finishProgress();
   document.getElementById('loading').style.display = 'none';
@@ -1516,44 +1509,6 @@ function startAutoSave() {
 
 window.addEventListener('beforeunload', () => saveProgress());
 
-// ── Captcha relay ─────────────────────────────────────────────────────────
-// Loads the cloudnestra rcp page in a hidden iframe so the browser auto-solves
-// Turnstile, then retries extraction once the backend has the _rcp token cached.
-async function tryCaptchaRelay() {
-  if (!mediaType || !mediaId) return false;
-  try {
-    const qs = new URLSearchParams({ type: mediaType, id: mediaId });
-    if (isEp) { qs.set('season', season); qs.set('episode', episode); }
-    if (imdbId) qs.set('imdbId', imdbId);
-
-    const r = await fetch(`${API}/stream/captcha-url?${qs}`);
-    const d = await r.json();
-    if (!d.success || !d.rcp_url) return false;
-
-    // Proxy the rcp page — browser will auto-solve Turnstile (<1s typically)
-    const frame = document.getElementById('captcha-frame');
-    frame.src = `${API}/stream/captcha-frame?url=${encodeURIComponent(d.rcp_url)}`;
-
-    // Give Turnstile up to 4s to solve and the relay POST to complete
-    await new Promise(res => setTimeout(res, 4000));
-
-    // Retry extraction — backend now has _rcp in cache if solve succeeded
-    const qs2 = new URLSearchParams();
-    if (isEp) { qs2.set('season', season); qs2.set('episode', episode); }
-    if (imdbId) qs2.set('imdbId', imdbId);
-    const res2 = await fetch(`${API}/stream/${mediaType}/${mediaId}?${qs2}`);
-    const data2 = await res2.json();
-    if (data2.success && data2.data?.stream_url) {
-      console.log('Captcha relay succeeded — loading stream');
-      loadStream(data2.data.stream_url, data2.data.filename || '', 0, data2.data.duration || 0);
-      return true;
-    }
-  } catch (e) {
-    console.warn('captcha relay error:', e);
-  }
-  return false;
-}
-
 // ── Next-episode prefetch ─────────────────────────────────────────────────
 // After playback starts, silently warm the stream cache for the next episode
 // so the user gets an instant cache-hit instead of a 15-20 s extraction wait.
@@ -1604,15 +1559,6 @@ async function init() {
     if (document.getElementById('loading').style.display === 'none') return;
     document.getElementById('load-sub').textContent = 'Still searching — this can take up to 30 seconds';
   }, 10000);
-
-  // If extraction is taking long a visible browser window may have opened for a
-  // security check — update the message so the user knows what to do.
-  _cfHint = setTimeout(() => {
-    if (document.getElementById('loading').style.display === 'none') return;
-    document.getElementById('load-msg').textContent = 'Security check in progress…';
-    document.getElementById('load-sub').textContent =
-      'A browser window opened on your screen — complete the check to continue';
-  }, 25000);
 
   try {
     const qs = new URLSearchParams();
