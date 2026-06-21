@@ -1379,6 +1379,7 @@ function loadStream(url, filename, resumeAt, duration) {
   document.getElementById('loading').style.display = 'none';
   showCtrls();
   if (isEp) setTimeout(prefetchNextEpisode, 60_000);
+  setTimeout(triggerSsdCache, 90_000);   // after 90s, start background SSD download
 
   const isHLS = url.includes('.m3u8');
 
@@ -1508,6 +1509,26 @@ function startAutoSave() {
 }
 
 window.addEventListener('beforeunload', () => saveProgress());
+
+// ── SSD cache trigger ─────────────────────────────────────────────────────
+// After 90s of playback the backend has already started downloading in the background.
+// This just pings cache-status to log it; the actual download was triggered server-side.
+async function triggerSsdCache() {
+  if (vid.paused || vid.ended || vid.currentTime < 60) return;  // user didn't really watch
+  try {
+    const qs = new URLSearchParams({ type: mediaType, id: mediaId });
+    if (isEp) { qs.set('season', season); qs.set('episode', episode); }
+    const r = await fetch(`${API}/stream/cache-status?${qs}`);
+    const d = await r.json();
+    if (d.status === 'downloading') {
+      console.log(`[cache] downloading: ${d.downloaded_gb}/${d.total_gb ?? '?'} GB`);
+    } else if (d.status === 'complete') {
+      console.log(`[cache] already cached locally (${d.size_gb} GB) — next play is instant`);
+    } else {
+      console.log('[cache] status:', d.status);
+    }
+  } catch (_) {}
+}
 
 // ── Next-episode prefetch ─────────────────────────────────────────────────
 // After playback starts, silently warm the stream cache for the next episode
