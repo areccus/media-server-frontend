@@ -77,8 +77,25 @@ const BACKEND_PORTS = [5001, 5000];
 //   - "mac-mini.tailscale.net" when accessing via Tailscale VPN
 const CURRENT_HOST = window.location.hostname;
 
-// Initialize API base URL (will be updated by detectBackendPort)
-let API_BASE_URL = `http://${CURRENT_HOST}:5000/api`;
+// On HTTPS (Vercel/production) use same-origin immediately so no calls race
+// with detectBackendPort() and trigger mixed-content errors.
+let API_BASE_URL = window.location.protocol === 'https:'
+  ? `${window.location.origin}/api`
+  : `http://${CURRENT_HOST}:5000/api`;
+
+// ngrok free tier shows a browser interstitial for any request with a browser
+// User-Agent unless this header is present. Patch fetch globally so every API
+// call bypasses it without having to touch each call site individually.
+if (window.location.protocol === 'https:') {
+  const _origFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const url = typeof input === 'string' ? input : (input?.url ?? '');
+    if (url.includes('/api/') || url.startsWith(API_BASE_URL)) {
+      init = { ...init, headers: { 'ngrok-skip-browser-warning': '1', ...(init.headers || {}) } };
+    }
+    return _origFetch(input, init);
+  };
+}
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -171,8 +188,8 @@ async function detectBackendPort() {
 const apiCache = {
   data: {},
   timestamps: {},
-  CACHE_DURATION: 8 * 60 * 60 * 1000,   // 8 hours in-memory
-  DISK_DURATION:  2 * 60 * 60 * 1000,   // 2 hours localStorage
+  CACHE_DURATION: 8 * 60 * 60 * 1000,    // 8 hours in-memory
+  DISK_DURATION:  24 * 60 * 60 * 1000,  // 24 hours localStorage
 };
 
 // localStorage helpers — silent on quota errors
@@ -230,7 +247,8 @@ function clearCacheEntry(endpoint) {
  *   // First call: Fetches from backend (slow)
  *   // Second call: Returns from cache (instant!)
  */
-async function fetchWithCache(endpoint) {
+// noBackground: skip the background revalidate (use for detail pages — metadata rarely changes)
+async function fetchWithCache(endpoint, { noBackground = false } = {}) {
   const now = Date.now();
 
   // 1. In-memory hit (fastest — same session navigation)
@@ -239,16 +257,12 @@ async function fetchWithCache(endpoint) {
     return apiCache.data[endpoint];
   }
 
-  // 2. localStorage hit (fast — survives page refresh, up to 2 hours)
+  // 2. localStorage hit
   const disk = lsGet(endpoint);
   if (disk) {
-    // Warm in-memory cache from disk so next nav is instant
     apiCache.data[endpoint] = disk.data;
     apiCache.timestamps[endpoint] = disk.ts;
-
-    // Revalidate in the background without blocking the caller
-    fetchFresh(endpoint);
-
+    if (!noBackground) fetchFresh(endpoint);
     return disk.data;
   }
 

@@ -483,7 +483,7 @@ function App() {
           <TopNav tab={tab} setTab={handleTabChange} sticky={true}/>
           <main className="inner-page">
             {route.page === 'detail' && route.params
-              ? <DetailPage mediaType={route.params.mediaType} mediaId={route.params.mediaId}/>
+              ? <DetailPage key={`${route.params.mediaType}_${route.params.mediaId}`} mediaType={route.params.mediaType} mediaId={route.params.mediaId}/>
               : route.page === 'search' ? <SearchPage/>
               : route.page === 'library' ? <LibraryPage/>
               : route.page === 'history' ? <HistoryPage/>

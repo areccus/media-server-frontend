@@ -696,9 +696,24 @@ if (isEp && totalEps > 0) {
 
 // ── Backend detection ─────────────────────────────────────────────────────
 const HOST = location.hostname;
-let API = `http://${HOST}:5001/api`;
+let API = location.protocol === 'https:'
+  ? `${location.origin}/api`
+  : `http://${HOST}:5001/api`;
+
+// Bypass ngrok browser interstitial for all API calls on HTTPS/production
+if (location.protocol === 'https:') {
+  const _origFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const url = typeof input === 'string' ? input : (input?.url ?? '');
+    if (url.includes('/api/')) {
+      init = { ...init, headers: { 'ngrok-skip-browser-warning': '1', ...(init.headers || {}) } };
+    }
+    return _origFetch(input, init);
+  };
+}
 
 async function detectBackend() {
+  if (location.protocol === 'https:') return; // Vercel rewrite handles it
   for (const port of [5001, 5000]) {
     try {
       const r = await fetch(`http://${HOST}:${port}/api/health`, { signal: AbortSignal.timeout(2000) });
@@ -956,10 +971,26 @@ vid.addEventListener('error', async () => {
   // Re-request with nocache=1 to force a fresh extraction before giving up.
   if ((code === 2 || code === 3 || code === 4) && !_noCache && mediaType && mediaId) {
     _noCache = true;
-    console.warn(`vid error ${code} — retrying with nocache=1`);
+    const _positionBeforeRetry = (vid.currentTime > 4) ? vid.currentTime : _resumeAt;
     document.getElementById('loading').style.display = 'flex';
-    document.getElementById('load-msg').textContent  = 'Refreshing stream…';
-    document.getElementById('load-sub').textContent  = 'URL may have expired — fetching fresh link';
+
+    // Error 4 on a proxy URL usually means the FFmpeg transcode session hadn't
+    // produced its first segment yet when iOS tried to read the m3u8.
+    // Wait 12 s so the warm session can catch up, then retry (the backend will
+    // reuse the same running FFmpeg session instead of spawning a new one).
+    const isProxyTranscode = (code === 4) &&
+      typeof vid.src === 'string' && vid.src.includes('/api/stream/proxy');
+    if (isProxyTranscode) {
+      console.warn('vid error 4 on proxy URL — waiting 12 s for FFmpeg warm-up');
+      document.getElementById('load-msg').textContent = 'Preparing stream…';
+      document.getElementById('load-sub').textContent = 'Transcoding for your device — almost ready';
+      await new Promise(r => setTimeout(r, 12000));
+    } else {
+      console.warn(`vid error ${code} — retrying with nocache=1`);
+      document.getElementById('load-msg').textContent = 'Refreshing stream…';
+      document.getElementById('load-sub').textContent = 'Link may have expired — fetching fresh source';
+    }
+
     try {
       const qs = new URLSearchParams({ nocache: '1' });
       if (season)  qs.set('season',  season);
@@ -968,7 +999,7 @@ vid.addEventListener('error', async () => {
       const res  = await fetch(`${API}/stream/${mediaType}/${mediaId}?${qs}`);
       const data = await res.json();
       if (data.success && data.data?.stream_url) {
-        loadStream(data.data.stream_url, data.data.filename || '', _resumeAt, data.data.duration || 0);
+        loadStream(data.data.stream_url, data.data.filename || '', _positionBeforeRetry, data.data.duration || 0);
         return;
       }
     } catch (_) {}
@@ -996,6 +1027,7 @@ document.addEventListener('keydown', e => {
 // ── Quality menu ──────────────────────────────────────────────────────────
 let activeHls = null;
 let _cfHint = null;
+let _slowHint = null;
 let _resumeAt = 0; // seconds to seek after video metadata loads
 let _knownDuration = 0; // real duration from ffprobe (overrides vid.duration for fMP4 streams)
 
@@ -1161,6 +1193,7 @@ function useEmbed() {
 function loadStream(url, filename, resumeAt, duration) {
   if (duration > 0) _knownDuration = duration;
   clearTimeout(_cfHint);
+  clearTimeout(_slowHint);
   finishProgress();
   document.getElementById('loading').style.display = 'none';
   showCtrls();
@@ -1189,14 +1222,21 @@ function loadStream(url, filename, resumeAt, duration) {
     const hls = new Hls({
       enableWorker: true,
       backBufferLength: 90,
+      maxBufferLength: 60,
+      maxMaxBufferLength: 120,
+      maxBufferSize: 120 * 1000 * 1000,
       capLevelToPlayerSize: false,
       abrEwmaDefaultEstimate: 10_000_000,
+      lowLatencyMode: false,
+      fragLoadingMaxRetry: 6,
+      fragLoadingRetryDelay: 1000,
+      manifestLoadingMaxRetry: 4,
     });
     activeHls = hls;
     hls.loadSource(srcUrl);
     hls.attachMedia(vid);
     hls.on(Hls.Events.MANIFEST_PARSED, (_, data) => {
-      hls.currentLevel = data.levels.length - 1; // highest quality
+      hls.currentLevel = -1; // let ABR pick based on bandwidth
       vid.play().catch(() => {});
     });
     hls.on(Hls.Events.ERROR, (_, d) => {
@@ -1331,8 +1371,14 @@ async function init() {
   startFakeProgress();
 
   document.getElementById('load-msg').textContent =
-    isEp ? `Extracting S${season}E${episode}…` : 'Extracting stream…';
-  document.getElementById('load-sub').textContent = 'May take up to 20 seconds';
+    isEp ? `Finding source for S${season}E${episode}…` : 'Finding best source…';
+  document.getElementById('load-sub').textContent = 'Searching for the highest quality link';
+
+  // Progressive status updates so users know it's working, not hung
+  _slowHint = setTimeout(() => {
+    if (document.getElementById('loading').style.display === 'none') return;
+    document.getElementById('load-sub').textContent = 'Still searching — this can take up to 30 seconds';
+  }, 10000);
 
   // If extraction is taking long a visible browser window may have opened for a
   // security check — update the message so the user knows what to do.
@@ -1356,9 +1402,19 @@ async function init() {
         .then(r => r.json())
         .catch(() => null),
     ]);
+
+    // Guard against non-JSON responses (Cloudflare error pages, tunnel down, etc.)
+    const ct = res.headers.get('content-type') || '';
+    if (!res.ok || !ct.includes('json')) {
+      if (res.status === 504 || res.status === 524) throw new Error('TIMEOUT');
+      if (res.status === 503 || res.status === 502) throw new Error('BACKEND_DOWN');
+      throw new Error(`Server returned ${res.status}`);
+    }
     const data = await res.json();
 
     if (!data.success || !data.data?.stream_url) {
+      const code = data.code || '';
+      if (code === 'no_source') throw new Error('NO_SOURCE');
       throw new Error(data.error || 'No stream URL returned');
     }
 
@@ -1385,7 +1441,20 @@ async function init() {
     console.error('Extraction failed:', err);
     const relayed = await tryCaptchaRelay();
     if (relayed) return;
-    showError(`Could not extract stream URL.\n${err.message}`);
+    if (err.message === 'NO_SOURCE') {
+      showError('No sources found for this title.\n\nIt may not be available yet — try again in a moment.');
+    } else if (err.message === 'TIMEOUT') {
+      showError('The server took too long to respond.\n\nThe backend may be busy — try again in a few seconds.');
+    } else if (err.message === 'BACKEND_DOWN') {
+      showError('Could not reach the server.\n\nCheck that the backend is running and the tunnel is up.');
+    } else if (err.message.includes('fetch') || err.message.includes('NetworkError') || err.message.includes('Failed to fetch')) {
+      showError('Network error — check your connection and try again.');
+    } else if (err.message.includes('pattern') || err.message.includes('JSON') || err.message.includes('SyntaxError')) {
+      // WebKit JSON parse error — backend returned non-JSON (tunnel down / CF error page)
+      showError('Server returned an unexpected response.\n\nThe Cloudflare tunnel may be down — restart the backend.');
+    } else {
+      showError(`Could not load a stream.\n${err.message}`);
+    }
   }
 }
 

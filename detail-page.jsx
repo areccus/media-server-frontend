@@ -25,6 +25,7 @@ function DetailPage({ mediaType, mediaId }) {
   const [showTrailer, setShowTrailer] = useState(false);
   const [showTrailerBtn, setShowTrailerBtn] = useState(false);
   const trailerTimerRef = useRef(null);
+  const loadedIdRef = useRef(null);
 
   // Reset everything when navigating to a different item
   useEffect(() => {
@@ -76,17 +77,19 @@ function DetailPage({ mediaType, mediaId }) {
   }, [item, selectedSeason]);
 
   async function loadDetails() {
-    setLoading(true);
+    // Skip the loading spinner if we already have this item rendered
+    const alreadyLoaded = loadedIdRef.current === `${mediaType}_${mediaId}`;
+    if (!alreadyLoaded) setLoading(true);
     try {
-      // Always fetch full details from API to get IMDB ID and VidSrc URL
-      const data = await window.fetchWithCache(`/details/${mediaType}/${mediaId}`);
+      const data = await window.fetchWithCache(`/details/${mediaType}/${mediaId}`, { noBackground: true });
+      loadedIdRef.current = `${mediaType}_${mediaId}`;
       setItem(data);
       loadSimilar(mediaType);
     } catch (error) {
       console.error('Failed to load details:', error);
-      // Fallback to cached item if API fails
       const cachedItem = ITEMS[`${mediaType}_${mediaId}`];
       if (cachedItem) {
+        loadedIdRef.current = `${mediaType}_${mediaId}`;
         setItem(cachedItem);
         loadSimilar(mediaType);
       }

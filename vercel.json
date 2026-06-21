@@ -1,0 +1,5 @@
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://lance-aloof-deodorize.ngrok-free.dev/api/:path*" }
+  ]
+}
