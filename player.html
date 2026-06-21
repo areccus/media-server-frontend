@@ -262,8 +262,8 @@
     }
 
     /* ── Quality menu ─────────────────────────────────────────────────── */
-    #source-wrap { position:relative; }
-    #source-menu {
+    #speed-wrap, #quality-wrap, #source-wrap { position:relative; }
+    #speed-menu, #quality-menu, #source-menu {
       position:absolute;
       bottom:calc(100% + 10px);
       right:0;
@@ -280,7 +280,7 @@
       z-index:100;
       box-shadow:0 8px 32px rgba(0,0,0,.5);
     }
-    #source-menu.open { display:flex; }
+    #speed-menu.open, #quality-menu.open, #source-menu.open { display:flex; }
 
 
     .q-label {
@@ -412,6 +412,33 @@
     /* ── Embed exit overlay (lives outside #wrap, survives useEmbed()) ─── */
     #embed-exit-overlay { display:none; }
     #embed-exit-overlay.active { display:block; }
+
+    /* ── Next episode auto-advance card ─────────────────────────────── */
+    #next-ep-card {
+      position:absolute;
+      bottom:90px;
+      right:24px;
+      background:rgba(10,13,20,.92);
+      backdrop-filter:blur(24px);
+      -webkit-backdrop-filter:blur(24px);
+      border:1px solid rgba(255,255,255,.1);
+      border-radius:14px;
+      padding:16px 20px;
+      display:flex;
+      align-items:center;
+      gap:14px;
+      z-index:50;
+      box-shadow:0 8px 32px rgba(0,0,0,.5);
+      animation:slideUp .25s ease;
+    }
+    @keyframes slideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
+    #next-ep-label { font-size:10px; font-weight:700; color:rgba(255,255,255,.45); text-transform:uppercase; letter-spacing:.08em; margin-bottom:2px; }
+    #next-ep-title { font-size:13px; font-weight:600; color:#fff; max-width:160px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #next-ep-actions { display:flex; flex-direction:column; gap:6px; }
+    #next-ep-play-btn { display:flex; align-items:center; gap:5px; background:#5BB7FF; color:#000; border:none; border-radius:6px; padding:6px 12px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit; }
+    #next-ep-play-btn:hover { background:#7ecbff; }
+    #next-ep-cancel-btn { background:none; border:none; color:rgba(255,255,255,.5); font-size:11px; font-family:inherit; cursor:pointer; padding:2px 0; text-align:left; }
+    #next-ep-cancel-btn:hover { color:#fff; }
 
     #embed-exit-zone {
       position:fixed;
@@ -590,6 +617,33 @@
           </svg>
         </button>
 
+        <!-- Playback speed -->
+        <div id="speed-wrap">
+          <button class="ibtn" id="btn-speed" title="Playback speed" onclick="toggleSpeedMenu()">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M20.38 8.57l-1.23 1.85a8 8 0 0 1-.22 7.58H5.07A8 8 0 0 1 15.58 6.85l1.85-1.23A10 10 0 0 0 3.35 19a2 2 0 0 0 1.72 1h13.85a2 2 0 0 0 1.74-1 10 10 0 0 0-.27-10.44zm-9.79 6.84a2 2 0 0 0 2.83 0l5.66-8.49-8.49 5.66a2 2 0 0 0 0 2.83z"/></svg>
+          </button>
+          <div id="speed-menu">
+            <div class="q-label">Speed</div>
+            <button class="q-item" onclick="setSpeed(0.5)">0.5×</button>
+            <button class="q-item" onclick="setSpeed(0.75)">0.75×</button>
+            <button class="q-item active" id="speed-1x" onclick="setSpeed(1)">1×</button>
+            <button class="q-item" onclick="setSpeed(1.25)">1.25×</button>
+            <button class="q-item" onclick="setSpeed(1.5)">1.5×</button>
+            <button class="q-item" onclick="setSpeed(2)">2×</button>
+          </div>
+        </div>
+
+        <!-- HLS quality -->
+        <div id="quality-wrap">
+          <button class="ibtn" id="btn-quality" title="Quality" onclick="toggleQualityMenu()">
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+          </button>
+          <div id="quality-menu">
+            <div class="q-label">Quality</div>
+            <button class="q-item active" id="quality-auto" onclick="setQuality(-1)">Auto</button>
+          </div>
+        </div>
+
         <!-- Source selector -->
         <div id="source-wrap">
           <button class="ibtn" id="btn-source" title="Source" onclick="toggleSourceMenu()">
@@ -603,7 +657,6 @@
             <button class="q-item" id="src-vidsrc" onclick="selectSource('vidsrc')">VidSrc Embed</button>
           </div>
         </div>
-
 
         <!-- Fullscreen -->
         <button class="ibtn" id="btn-fs" onclick="toggleFS()" title="Fullscreen (F)">
@@ -637,6 +690,28 @@
       <button class="ebtn ebtn-s" onclick="goBack()">Go Back</button>
     </div>
     <div id="err-embed-note" style="display:none;color:#ff5c5c;font-size:0.82em;margin-top:10px;">With VidSrc we can't save your watch progress</div>
+  </div>
+
+  <!-- Next episode auto-advance card -->
+  <div id="next-ep-card" style="display:none">
+    <div id="next-ep-info">
+      <div id="next-ep-label">Up next</div>
+      <div id="next-ep-title"></div>
+    </div>
+    <div id="next-ep-actions">
+      <button id="next-ep-play-btn" onclick="advanceNextEp()">
+        Play Now
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      </button>
+      <button id="next-ep-cancel-btn" onclick="cancelAutoAdvance()">Cancel</button>
+    </div>
+    <svg id="next-ep-ring" viewBox="0 0 40 40" width="44" height="44">
+      <circle cx="20" cy="20" r="17" fill="none" stroke="rgba(255,255,255,.15)" stroke-width="3"/>
+      <circle id="next-ep-ring-fill" cx="20" cy="20" r="17" fill="none" stroke="#5BB7FF" stroke-width="3"
+        stroke-dasharray="107" stroke-dashoffset="107" stroke-linecap="round"
+        transform="rotate(-90 20 20)"/>
+      <text id="next-ep-count" x="20" y="25" text-anchor="middle" fill="#fff" font-size="13" font-family="inherit" font-weight="600">7</text>
+    </svg>
   </div>
 
 </div><!-- /wrap -->
@@ -823,11 +898,61 @@ function fmt(s) {
     ? `${h}:${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`
     : `${m}:${String(ss).padStart(2,'0')}`;
 }
+// ── Next-episode auto-advance countdown ───────────────────────────────────
+const _NEXT_EP_LEAD = 30;  // show card N seconds before end
+const _nextEpCard = document.getElementById('next-ep-card');
+let _autoAdvanceTimer = null;
+let _autoAdvanceSecs  = 7;
+let _autoAdvanceActive = false;
+
+function _showNextEpCard(nextS, nextE) {
+  if (_autoAdvanceActive || !isEp || episode >= totalEps) return;
+  _autoAdvanceActive = true;
+  document.getElementById('next-ep-title').textContent =
+    `S${String(nextS).padStart(2,'0')}E${String(nextE).padStart(2,'0')}`;
+  _nextEpCard.style.display = 'flex';
+  _autoAdvanceSecs = 7;
+  const ring = document.getElementById('next-ep-ring-fill');
+  const countEl = document.getElementById('next-ep-count');
+  const circumference = 107;
+  _autoAdvanceTimer = setInterval(() => {
+    _autoAdvanceSecs--;
+    countEl.textContent = _autoAdvanceSecs;
+    ring.style.strokeDashoffset = circumference * (1 - (_autoAdvanceSecs / 7));
+    if (_autoAdvanceSecs <= 0) { clearInterval(_autoAdvanceTimer); advanceNextEp(); }
+  }, 1000);
+}
+
+function advanceNextEp() {
+  clearInterval(_autoAdvanceTimer);
+  _nextEpCard.style.display = 'none';
+  const nextE = episode + 1;
+  const nextS = nextE > totalEps ? season + 1 : season;
+  const realNextE = nextE > totalEps ? 1 : nextE;
+  goEp(nextS, realNextE);
+}
+
+function cancelAutoAdvance() {
+  clearInterval(_autoAdvanceTimer);
+  _autoAdvanceActive = false;
+  _nextEpCard.style.display = 'none';
+}
+
 vid.addEventListener('timeupdate', () => {
   const dur = _knownDuration || vid.duration;
   if (!dragging && dur) {
     applySeek(vid.currentTime / dur);
     timeEl.textContent = `${fmt(vid.currentTime)} / ${fmt(dur)}`;
+
+    // Show next-episode card when approaching the end
+    if (isEp && episode < totalEps && !_autoAdvanceActive && !vid.paused) {
+      const remaining = dur - vid.currentTime;
+      if (remaining <= _NEXT_EP_LEAD && remaining > 0) {
+        const nextE = episode + 1;
+        const nextS = nextE > totalEps ? season + 1 : season;
+        _showNextEpCard(nextS, nextE > totalEps ? 1 : nextE);
+      }
+    }
   }
 
   // Accumulate real watched seconds (ignore seeks: only count small forward steps)
@@ -1064,8 +1189,71 @@ document.addEventListener('click', e => {
   }
 });
 
+function _closeAllMenus() {
+  ['speed-menu','quality-menu','source-menu'].forEach(id =>
+    document.getElementById(id)?.classList.remove('open'));
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#speed-wrap,#quality-wrap,#source-wrap')) _closeAllMenus();
+});
+
+// ── Speed ──────────────────────────────────────────────────────────────────
+function toggleSpeedMenu() {
+  const m = document.getElementById('speed-menu');
+  const wasOpen = m.classList.contains('open');
+  _closeAllMenus();
+  if (!wasOpen) m.classList.add('open');
+}
+function setSpeed(rate) {
+  vid.playbackRate = rate;
+  document.querySelectorAll('#speed-menu .q-item').forEach(b => {
+    const r = parseFloat(b.textContent);
+    b.classList.toggle('active', r === rate);
+  });
+  document.getElementById('speed-menu').classList.remove('open');
+}
+
+// ── HLS quality ────────────────────────────────────────────────────────────
+function toggleQualityMenu() {
+  const m = document.getElementById('quality-menu');
+  const wasOpen = m.classList.contains('open');
+  _closeAllMenus();
+  if (!wasOpen) {
+    _refreshQualityMenu();
+    m.classList.add('open');
+  }
+}
+function _refreshQualityMenu() {
+  const menu = document.getElementById('quality-menu');
+  // Remove old level buttons, keep the Auto button
+  menu.querySelectorAll('.q-level').forEach(b => b.remove());
+  if (!activeHls || !activeHls.levels.length) return;
+  activeHls.levels.forEach((lv, i) => {
+    const label = lv.height ? `${lv.height}p` : `Level ${i}`;
+    const btn = document.createElement('button');
+    btn.className = 'q-item q-level';
+    btn.textContent = label;
+    btn.onclick = () => setQuality(i);
+    menu.appendChild(btn);
+  });
+}
+function setQuality(level) {
+  if (activeHls) {
+    activeHls.currentLevel = level;
+    const isAuto = level === -1;
+    document.getElementById('quality-auto').classList.toggle('active', isAuto);
+    document.querySelectorAll('#quality-menu .q-level').forEach((b, i) => {
+      b.classList.toggle('active', i === level);
+    });
+  }
+  document.getElementById('quality-menu').classList.remove('open');
+}
+
 function toggleSourceMenu() {
-  document.getElementById('source-menu').classList.toggle('open');
+  const m = document.getElementById('source-menu');
+  const wasOpen = m.classList.contains('open');
+  _closeAllMenus();
+  if (!wasOpen) m.classList.add('open');
 }
 
 let _currentSource = 'debrid';
@@ -1239,14 +1427,51 @@ function loadStream(url, filename, resumeAt, duration) {
       hls.currentLevel = -1; // let ABR pick based on bandwidth
       vid.play().catch(() => {});
     });
+    let _hlsMediaRecoveries = 0;
     hls.on(Hls.Events.ERROR, (_, d) => {
-      if (d.fatal) {
-        console.error('HLS fatal:', d.type, d.details, d.response, d.url);
-        showError(`Stream error: ${d.details} (${d.type})\nURL: ${(d.url||'').slice(0,60)}`);
+      if (!d.fatal) return;
+      console.error('HLS fatal:', d.type, d.details, d.response?.code, d.url);
+      if (d.type === Hls.ErrorTypes.NETWORK_ERROR) {
+        // Transient network issue — restart the manifest/segment load
+        console.warn('HLS: network error, attempting startLoad() recovery');
+        hls.startLoad();
+        return;
       }
+      if (d.type === Hls.ErrorTypes.MEDIA_ERROR && _hlsMediaRecoveries < 2) {
+        _hlsMediaRecoveries++;
+        console.warn('HLS: media error, recoverMediaError() attempt #' + _hlsMediaRecoveries);
+        hls.recoverMediaError();
+        return;
+      }
+      // Unrecoverable — show error screen
+      showError(`Stream error: ${d.details} (${d.type})\nURL: ${(d.url||'').slice(0,60)}`);
     });
   } else if (isHLS && vid.canPlayType('application/vnd.apple.mpegurl')) {
+    // iOS Safari native HLS — no hls.js, so we add our own stall/error recovery.
     vid.src = srcUrl;
+    let _nativeHlsRecoveryTimer = null;
+    function _scheduleNativeHlsRecovery() {
+      clearTimeout(_nativeHlsRecoveryTimer);
+      _nativeHlsRecoveryTimer = setTimeout(async () => {
+        if (vid.paused || vid.ended) return;
+        const pos = vid.currentTime;
+        try {
+          const qs2 = new URLSearchParams();
+          if (isEp) { qs2.set('season', season); qs2.set('episode', episode); }
+          qs2.set('nocache', '1');
+          const resp = await fetch(`${API}/stream/${mediaType}/${mediaId}?${qs2}`);
+          const data = await resp.json();
+          if (data?.data?.stream_url) {
+            const fresh = data.data.stream_url + (pos > 4 ? `&t=${Math.floor(pos)}` : '');
+            vid.src = fresh;
+            vid.play().catch(() => {});
+          }
+        } catch (_) {}
+      }, 8000);
+    }
+    vid.addEventListener('waiting', _scheduleNativeHlsRecovery);
+    vid.addEventListener('stalled', _scheduleNativeHlsRecovery);
+    vid.addEventListener('playing', () => clearTimeout(_nativeHlsRecoveryTimer));
     vid.play().catch(() => {});
   } else if (!isHLS) {
     // MKV streams are remuxed to MP4 by the proxy — just load the proxied URL.

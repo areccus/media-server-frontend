@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://lance-aloof-deodorize.ngrok-free.dev/api/:path*" }
+    { "source": "/api/:path*", "destination": "https://rendered-belly-partial-myth.trycloudflare.com/api/:path*" }
   ]
 }
