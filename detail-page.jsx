@@ -81,7 +81,8 @@ function DetailPage({ mediaType, mediaId }) {
     const alreadyLoaded = loadedIdRef.current === `${mediaType}_${mediaId}`;
     if (!alreadyLoaded) setLoading(true);
     try {
-      const data = await window.fetchWithCache(`/details/${mediaType}/${mediaId}`, { noBackground: true });
+      const pid = window.currentProfileId || 1;
+      const data = await window.fetchWithCache(`/details/${mediaType}/${mediaId}?profile_id=${pid}`, { noBackground: true });
       loadedIdRef.current = `${mediaType}_${mediaId}`;
       setItem(data);
       loadSimilar(mediaType);
