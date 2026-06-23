@@ -422,7 +422,7 @@ function Row({ row, onOpen, onSeeAll }) {
           if (onSeeAll) { onSeeAll(); return; }
           const map = {mv:'movies', tv:'tv', an:'anime', tr:'trending', rec:'recommended'};
           if (map[row.id]) window.navigate(map[row.id]);
-        }}>See all</button>
+        }}>{row.seeAllLabel || 'See all'}</button>
       </div>
       <div className="row__scroller">
         <button className="rail-arrow left" disabled={edge.l} onClick={() => nudge(-1)} aria-label="scroll left">{Icon.left}</button>

@@ -267,6 +267,8 @@ async function loadContinueWatching() {
   const data = await window.fetchWithCache(`/progress/continue-watching?profile_id=${pid}`) || [];
   return data.map(item => ({
     id: `${item.media_type}_${item.media_id}`,
+    mediaId: item.media_id,
+    mediaType: item.media_type,
     title: item.title,
     poster: item.poster,
     backdrop: item.backdrop,
@@ -274,48 +276,75 @@ async function loadContinueWatching() {
     progress: item.progress,
     season: item.season || 0,
     episode: item.episode || 0,
+    genre: item.genre || '',
     isMovie: item.media_type === 'movie',
   }));
 }
 
-function HistoryListItem({ item }) {
-  const [hover, setHover] = useState(false);
+function HistoryRingProgress({ progress, tone, size }) {
+  const s = size || 52;
+  const r = (s - 12) / 2;
+  const cx = s / 2;
+  const circ = 2 * Math.PI * r;
+  const arc = circ * Math.min(Math.max(progress || 0, 0), 1);
+  const pct = Math.round((progress || 0) * 100);
+  return (
+    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} style={{ display: 'block' }}>
+      <circle cx={cx} cy={cx} r={r + 3} fill="rgba(255,255,255,0.92)"/>
+      <circle cx={cx} cy={cx} r={r} fill="none" stroke="rgba(0,0,0,0.1)" strokeWidth="5"/>
+      <circle cx={cx} cy={cx} r={r} fill="none"
+        stroke={tone || '#2f86ff'} strokeWidth="5"
+        strokeLinecap="round"
+        strokeDasharray={`${arc} ${circ - arc}`}
+        transform={`rotate(-90 ${cx} ${cx})`}/>
+      <text x={cx} y={cx} textAnchor="middle" dominantBaseline="central"
+        fill="#08090d" fontSize={Math.round(s * 0.22)} fontWeight="800" fontFamily="system-ui,sans-serif">
+        {pct}%
+      </text>
+    </svg>
+  );
+}
 
+function HistoryListItem({ item, onDelete }) {
   function handleClick() {
-    const [type, id] = item.id.split('_');
-    navigate(`detail/${type}/${id}`);
+    navigate(`detail/${item.mediaType}/${item.mediaId}`);
   }
 
-  const epLabel = item.isMovie ? 'Movie' : (item.season > 0 ? `S${item.season} E${item.episode}` : 'TV Show');
+  async function handleDelete(e) {
+    e.stopPropagation();
+    const pid = window.currentProfileId || 1;
+    try {
+      await fetch(`${window.API_BASE_URL}/progress/delete/${item.mediaType}/${item.mediaId}?profile_id=${pid}`, { method: 'DELETE' });
+      onDelete?.(item.id);
+    } catch (_) {}
+  }
+
+  const epLabel = item.isMovie
+    ? (item.genre || 'Movie')
+    : (item.genre || (item.season > 0 ? `S${item.season} · E${item.episode}` : 'TV Show'));
+  const pct = Math.round((item.progress || 0) * 100);
 
   return (
-    <div
-      className={'history-item' + (hover ? ' is-hover' : '')}
-      onClick={handleClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-    >
-      <div className="history-item__thumb">
-        <img src={item.backdrop || landscapeUrl(item)} alt="" loading="lazy" draggable="false" />
-        {item.progress > 0 && (
-          <div className="history-item__bar">
-            <div className="history-item__bar-fill" style={{ width: `${item.progress * 100}%`, background: item.tone || 'var(--acc)' }} />
-          </div>
-        )}
-        <div className="history-item__play">
-          <svg viewBox="0 0 24 24" width="20" height="20">
-            <circle cx="12" cy="12" r="11" fill="rgba(255,255,255,0.92)" />
-            <path fill="#08090d" d="M10 8v8l6-4z"/>
-          </svg>
+    <div className="hist-row" onClick={handleClick}>
+      <div className="hist-poster">
+        <img src={posterUrl(item)} alt="" loading="lazy" draggable="false"/>
+        <div className="hist-ring">
+          <HistoryRingProgress progress={item.progress} tone={item.tone} size={52}/>
         </div>
       </div>
-      <div className="history-item__info">
-        <div className="history-item__title">{item.title}</div>
-        <div className="history-item__ep">{epLabel}</div>
+      <div className="hist-info">
+        <div className="hist-title">{item.title}</div>
+        <div className="hist-sub">{epLabel}</div>
+        <div className="hist-pct" style={{ color: item.tone || 'var(--acc)' }}>{pct}% watched</div>
       </div>
-      <svg className="history-item__chevron" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
-        <path d="m9 6 6 6-6 6"/>
-      </svg>
+      <button className="hist-del" onClick={handleDelete} aria-label="Remove from history">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+          <path d="M10 11v6M14 11v6"/>
+          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>
     </div>
   );
 }
@@ -359,7 +388,7 @@ function LibraryPage() {
   const recent = continueWatching.slice(0, 8);
   const hasMore = continueWatching.length > 8;
 
-  const cwRow = { id: 'cw-lib', label: 'Continue Watching', layout: 'continue', items: recent };
+  const cwRow = { id: 'cw-lib', label: 'Continue Watching', layout: 'continue', seeAllLabel: 'History', items: recent };
 
   return (
     <div className="library-page">
@@ -418,17 +447,14 @@ function HistoryPage() {
     loadContinueWatching().then(data => { setItems(data || []); setLoading(false); }).catch(() => setLoading(false));
   }, []);
 
-  function openItem(item) {
-    const [type, id] = item.id.split('_');
-    navigate(`detail/${type}/${id}`);
+  function handleDelete(id) {
+    setItems(prev => prev.filter(i => i.id !== id));
   }
 
   if (loading) return <PageSpinner label="History" />;
 
-  const histRow = { id: 'hist-all', label: 'Watch History', layout: 'continue', items };
-
   return (
-    <div className="library-page">
+    <div className="hist-page">
       <div className="library-header">
         <button className="back-button" onClick={() => navigate('library')}>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -436,20 +462,22 @@ function HistoryPage() {
           </svg>
           Back to Library
         </button>
-        <h1 className="page-title">Watch History</h1>
+        <h1 className="page-title">History</h1>
       </div>
 
-      <div className="lib-rows">
-        {items.length === 0 ? (
-          <div className="lib-empty">
-            <div style={{fontSize:48, marginBottom:16}}>🎬</div>
-            <div style={{fontSize:18, fontWeight:700, marginBottom:8}}>Nothing watched yet</div>
-            <div style={{fontSize:14, color:'var(--muted)'}}>Start watching something to see it here.</div>
-          </div>
-        ) : (
-          <Row row={histRow} onOpen={openItem}/>
-        )}
-      </div>
+      {items.length === 0 ? (
+        <div className="lib-empty">
+          <div style={{fontSize:48, marginBottom:16}}>🎬</div>
+          <div style={{fontSize:18, fontWeight:700, marginBottom:8}}>Nothing watched yet</div>
+          <div style={{fontSize:14, color:'var(--muted)'}}>Start watching something to see it here.</div>
+        </div>
+      ) : (
+        <div className="hist-list">
+          {items.map(item => (
+            <HistoryListItem key={item.id} item={item} onDelete={handleDelete}/>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

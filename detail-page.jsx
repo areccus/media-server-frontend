@@ -124,7 +124,8 @@ function DetailPage({ mediaType, mediaId }) {
     const backdropP = encodeURIComponent(item.backdrop || '');
     const toneP     = encodeURIComponent(item.tone     || '#5BB7FF');
     const soParam   = startOver ? '&startOver=1' : '';
-    window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${epTitle}&src=${encodeURIComponent(src)}&season=${seasonNum}&episode=${episodeNum}&totalEpisodes=${totalEpisodes}&${idParam}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}${soParam}`;
+    const genreP    = encodeURIComponent(item.genre || '');
+    window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${epTitle}&src=${encodeURIComponent(src)}&season=${seasonNum}&episode=${episodeNum}&totalEpisodes=${totalEpisodes}&${idParam}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}&genre=${genreP}${soParam}`;
   }
 
   async function loadSimilar(type) {
@@ -352,7 +353,8 @@ function DetailPage({ mediaType, mediaId }) {
                     const idKey2    = item.imdb_id ? `imdb=${item.imdb_id}` : `tmdb=${item.tmdb_id}`;
                     const embedSrc  = `https://vidsrc-embed.ru/embed/movie?${idKey2}`;
                     const imdbParam = item.imdb_id ? `&imdbId=${item.imdb_id}` : '';
-                    window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${encodeURIComponent(item.title)}&src=${encodeURIComponent(embedSrc)}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}${imdbParam}`;
+                    const genreP2   = encodeURIComponent(item.genre || '');
+                    window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${encodeURIComponent(item.title)}&src=${encodeURIComponent(embedSrc)}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}&genre=${genreP2}${imdbParam}`;
                   }
                 }}
               >
@@ -376,7 +378,8 @@ function DetailPage({ mediaType, mediaId }) {
                       const idKey2    = item.imdb_id ? `imdb=${item.imdb_id}` : `tmdb=${item.tmdb_id}`;
                       const embedSrc  = `https://vidsrc-embed.ru/embed/movie?${idKey2}`;
                       const imdbParam = item.imdb_id ? `&imdbId=${item.imdb_id}` : '';
-                      window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${encodeURIComponent(item.title)}&src=${encodeURIComponent(embedSrc)}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}${imdbParam}&startOver=1`;
+                      const genreP3   = encodeURIComponent(item.genre || '');
+                      window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${encodeURIComponent(item.title)}&src=${encodeURIComponent(embedSrc)}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}&genre=${genreP3}${imdbParam}&startOver=1`;
                     }
                   }}
                 >

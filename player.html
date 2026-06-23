@@ -752,6 +752,7 @@ const startOver = P.get('startOver') === '1';
 const poster    = P.get('poster')   || '';
 const backdrop  = P.get('backdrop') || '';
 const tone      = P.get('tone')     || '#5BB7FF';
+const genre     = P.get('genre')    || '';
 const profileId = parseInt(localStorage.getItem('currentProfileId') || '1');
 const isEp      = season > 0 && episode > 0;
 
@@ -1496,6 +1497,7 @@ async function saveProgress() {
         duration:     dur,
         season:       season  || 0,
         episode:      episode || 0,
+        genre:        genre   || '',
         quality:      activeHls ? (activeHls.levels[activeHls.currentLevel]?.height + 'p' || '1080p') : '1080p'
       })
     });
