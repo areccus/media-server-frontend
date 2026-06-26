@@ -19,6 +19,7 @@ function DetailPage({ mediaType, mediaId }) {
   const [seasonDropdownOpen, setSeasonDropdownOpen] = useState(false);
   const [episodes, setEpisodes] = useState([]);
   const [episodesLoading, setEpisodesLoading] = useState(false);
+  const [watchedEpisodes, setWatchedEpisodes] = useState(new Set());
   const [trailerKey, setTrailerKey] = useState(null);
   // Desktop: showTrailer swaps the banner to the autoplaying iframe
   // iOS: showTrailerBtn reveals the Watch Trailer button → trailerOpen opens modal
@@ -36,7 +37,22 @@ function DetailPage({ mediaType, mediaId }) {
     setShowTrailer(false);
     setShowTrailerBtn(false);
     clearTimeout(trailerTimerRef.current);
+    setWatchedEpisodes(new Set());
   }, [mediaId]);
+
+  // Load watched episodes for TV/anime
+  useEffect(() => {
+    if (!mediaId || (mediaType !== 'tv' && mediaType !== 'anime')) return;
+    const pid = window.currentProfileId || 1;
+    fetch(`${window.API_BASE_URL}/progress/watched-episodes/${mediaId}?profile_id=${pid}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          setWatchedEpisodes(new Set((d.data || []).map(e => `${e.season}_${e.episode}`)));
+        }
+      })
+      .catch(() => {});
+  }, [mediaId, mediaType]);
 
   useEffect(() => {
     loadDetails();
@@ -523,7 +539,14 @@ function DetailPage({ mediaType, mediaId }) {
               <div className="episodes-loading">Loading episodes...</div>
             ) : (
               <div className="episodes-list">
-                {episodes.map(ep => (
+                {episodes.map(ep => {
+                  const epKey = `${selectedSeason}_${ep.episode_number}`;
+                  const isWatched = watchedEpisodes.has(epKey);
+                  const isActive = progressData &&
+                    progressData.season === selectedSeason &&
+                    progressData.episode === ep.episode_number;
+                  const activePct = isActive ? Math.round((progressData.progress || 0) * 100) : 0;
+                  return (
                   <div key={ep.episode_number} className="episode-card" onClick={() => playEpisode(selectedSeason, ep.episode_number)}>
                     <div className="episode-still">
                       {ep.still
@@ -543,6 +566,18 @@ function DetailPage({ mediaType, mediaId }) {
                         </svg>
                       </div>
                       <div className="episode-num-badge">E{ep.episode_number}</div>
+                      {isWatched && (
+                        <div className="ep-watched-check">
+                          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                            <path d="M5 13l4 4L19 7"/>
+                          </svg>
+                        </div>
+                      )}
+                      {isActive && (
+                        <div className="ep-active-bar">
+                          <div className="ep-active-bar__fill" style={{width: activePct + '%'}}/>
+                        </div>
+                      )}
                     </div>
                     <div className="episode-info">
                       <div className="episode-info-top">
@@ -578,7 +613,8 @@ function DetailPage({ mediaType, mediaId }) {
                       ) : null}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

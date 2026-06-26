@@ -1145,3 +1145,143 @@ html.compact .genre-page-head { padding: 24px var(--gutter) 16px; }
   box-shadow: 0 0 0 3px var(--accent, #5BB7FF), 0 0 28px rgba(91,183,255,.45) !important;
   border-radius: inherit;
 }
+
+/* ── Top 10 row ──────────────────────────────────────────────────────────────── */
+.card--top10 {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  flex-shrink: 0;
+  width: 200px;
+  cursor: pointer;
+}
+.top10-num {
+  font-size: 120px;
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -.06em;
+  color: transparent;
+  -webkit-text-stroke: 3px rgba(255,255,255,.18);
+  text-shadow: none;
+  user-select: none;
+  flex-shrink: 0;
+  width: 80px;
+  text-align: right;
+  margin-right: -12px;
+  position: relative;
+  z-index: 2;
+  align-self: flex-end;
+  padding-bottom: 4px;
+}
+.card--top10 .card__inner {
+  width: 130px;
+  flex-shrink: 0;
+  border-radius: var(--card-radius, 14px);
+  overflow: hidden;
+  aspect-ratio: 2/3;
+  position: relative;
+}
+.card--top10 .card__inner img.art {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.card--top10 .card__glow {
+  position: absolute;
+  inset: -20% -30%;
+  background: radial-gradient(ellipse at 60% 60%, color-mix(in srgb, var(--cardglow, #2f86ff) 40%, transparent) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+  opacity: .7;
+}
+
+/* ── Download badge ──────────────────────────────────────────────────────────── */
+.dl-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.90);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+  box-shadow: 0 1px 6px rgba(0,0,0,.5);
+  pointer-events: none;
+}
+
+/* ── Trailer hover overlay ───────────────────────────────────────────────────── */
+.trailer-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  border-radius: inherit;
+  overflow: hidden;
+  background: #000;
+}
+.trailer-overlay iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  pointer-events: none;
+}
+
+/* ── Episode watched / progress indicators ───────────────────────────────────── */
+.ep-watched-check {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(16, 185, 129, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 4;
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+}
+.ep-watched-check svg { display: block; }
+
+.ep-active-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: rgba(255,255,255,.18);
+  border-radius: 0 0 4px 4px;
+  overflow: hidden;
+}
+.ep-active-bar__fill {
+  height: 100%;
+  background: var(--accent, #2f86ff);
+  border-radius: 2px;
+  transition: width .3s;
+}
+
+/* ── Skip Intro button ───────────────────────────────────────────────────────── */
+#skip-intro-btn {
+  position: absolute;
+  bottom: 80px;
+  right: 24px;
+  padding: 10px 22px;
+  background: rgba(20,20,30,.88);
+  color: #fff;
+  border: 1.5px solid rgba(255,255,255,.35);
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: system-ui, sans-serif;
+  cursor: pointer;
+  z-index: 30;
+  display: none;
+  backdrop-filter: blur(6px);
+  transition: background .15s, border-color .15s;
+}
+#skip-intro-btn:hover { background: rgba(255,255,255,.15); border-color: rgba(255,255,255,.6); }

@@ -459,13 +459,14 @@ async function initializeData() {
     //   const a = await fetch1;
     //   const b = await fetch2;  (waits for a)
     //   const c = await fetch3;  (waits for b)
-    const [heroItems, trending, recommended, movies, tvShows, anime] = await Promise.all([
+    const [heroItems, trending, recommended, movies, tvShows, anime, upcoming] = await Promise.all([
       fetchWithCache('/hero'),                  // 5 featured items
       fetchWithCache('/trending?type=all'),     // 10 trending items
       fetchWithCache('/recommended'),           // 10 recommended movies
       fetchWithCache('/movies'),                // 10 popular movies
       fetchWithCache('/tv'),                    // 10 popular TV shows
-      fetchWithCache('/anime')                  // 10 anime shows
+      fetchWithCache('/anime'),                 // 10 anime shows
+      fetchWithCache('/movies/upcoming').catch(() => []),  // coming soon
     ]);
 
     // ───────────────────────────────────────────────────────────────────────
@@ -475,13 +476,14 @@ async function initializeData() {
     // Combine all arrays into one big array
     // [...a, ...b] = spread operator, combines arrays
     const allItems = [
-      ...heroItems,      // 5 items
-      ...trending,       // 10 items
-      ...recommended,    // 10 items
-      ...movies,         // 10 items
-      ...tvShows,        // 10 items
-      ...anime           // 10 items
-    ];                   // Total: 55 items
+      ...heroItems,
+      ...trending,
+      ...recommended,
+      ...movies,
+      ...tvShows,
+      ...anime,
+      ...(upcoming || []),
+    ];
 
     // Convert array to object for fast lookups
     // Array: [item1, item2, item3] → O(n) lookup (slow)
@@ -515,9 +517,14 @@ async function initializeData() {
     // Add all content rows
     ROWS.push(
       {
-        id: 'tr',                           // Unique row ID
-        label: 'Trending Now',              // Display label
-        items: trending.map(item => item.id)  // Array of item IDs
+        id: 'tr',
+        label: 'Trending Now',
+        items: trending.map(item => item.id)
+      },
+      {
+        id: 'top10',
+        label: 'Top 10 in the US Today',
+        items: trending.slice(0, 10).map(item => item.id)
       },
       {
         id: 'rec',
@@ -540,6 +547,25 @@ async function initializeData() {
         items: anime.map(item => item.id)
       }
     );
+    if ((upcoming || []).length > 0) {
+      ROWS.push({
+        id: 'coming',
+        label: 'Coming Soon',
+        items: upcoming.map(item => item.id)
+      });
+    }
+
+    // Pre-load completed local cache entries for download badges (best-effort)
+    fetch(`${API_BASE_URL}/video-cache/list`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          window.cachedSet = new Set(
+            (d.data || []).map(e => `${e.media_type}_${e.media_id}`)
+          );
+        }
+      })
+      .catch(() => {});
 
     // ───────────────────────────────────────────────────────────────────────
     // STEP 6: Log success message

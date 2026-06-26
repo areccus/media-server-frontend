@@ -692,6 +692,9 @@
     <div id="err-embed-note" style="display:none;color:#ff5c5c;font-size:0.82em;margin-top:10px;">With VidSrc we can't save your watch progress</div>
   </div>
 
+  <!-- Skip Intro button (shown by JS when currentTime is in intro window) -->
+  <button id="skip-intro-btn" onclick="skipIntro()">Skip Intro</button>
+
   <!-- Next episode auto-advance card -->
   <div id="next-ep-card" style="display:none">
     <div id="next-ep-info">
@@ -951,6 +954,16 @@ vid.addEventListener('timeupdate', () => {
     }
   }
 
+  // Skip Intro button visibility
+  if (_skipIntroBtn && _introStart !== null && _introEnd !== null && !_resumeAt) {
+    const ct = vid.currentTime;
+    if (ct >= _introStart && ct <= _introEnd) {
+      _skipIntroBtn.style.display = 'block';
+    } else {
+      _skipIntroBtn.style.display = 'none';
+    }
+  }
+
   // Accumulate real watched seconds (ignore seeks: only count small forward steps)
   if (isEp && !_episodeMarkedWatched && _lastVidTime >= 0 && !vid.paused) {
     const delta = vid.currentTime - _lastVidTime;
@@ -1175,6 +1188,31 @@ async function markEpisodeWatched() {
 vid.addEventListener('loadedmetadata', () => {
   if (_resumeAt > 4) { vid.currentTime = _resumeAt; _resumeAt = 0; }
 });
+
+// ── Skip Intro ────────────────────────────────────────────────────────────
+let _introStart = null;
+let _introEnd   = null;
+const _skipIntroBtn = document.getElementById('skip-intro-btn');
+
+(async function loadIntroOffset() {
+  if (!mediaId) return;
+  try {
+    const qs  = isEp ? `season=${season}&episode=${episode}` : '';
+    const r   = await fetch(`${API}/intro/${mediaType}/${mediaId}` + (qs ? `?${qs}` : ''));
+    const d   = await r.json();
+    if (d.success && d.data) {
+      _introStart = d.data.intro_start;
+      _introEnd   = d.data.intro_end;
+    }
+  } catch (_) {}
+})();
+
+function skipIntro() {
+  if (_introEnd !== null) {
+    vid.currentTime = _introEnd;
+    _skipIntroBtn.style.display = 'none';
+  }
+}
 
 // Close source menu on outside click
 document.addEventListener('click', e => {

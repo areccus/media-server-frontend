@@ -25,6 +25,11 @@ function ProfilePicker({ onSelect, onClose }) {
   const [formAvatar, setFormAvatar] = React.useState('🦊');
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [hoveredId, setHoveredId] = React.useState(null);
+  // PIN lock state
+  const [pinTarget, setPinTarget]   = React.useState(null);  // profile awaiting PIN
+  const [pinInput, setPinInput]     = React.useState('');
+  const [pinError, setPinError]     = React.useState(false);
+  const [pinSetting, setPinSetting] = React.useState('');    // for set-pin form in edit mode
 
   const AVATARS = ['🦊','🐱','🐶','🐸','🦁','🐼','🐧','🦄','🎬','🎮','🎵','⭐','🌙','🌸','🔥','💫'];
 
@@ -87,13 +92,47 @@ function ProfilePicker({ onSelect, onClose }) {
   }
 
   function resetForm() {
-    setMode('pick'); setEditing(null); setFormName(''); setFormAvatar('🦊'); setConfirmDelete(false);
+    setMode('pick'); setEditing(null); setFormName(''); setFormAvatar('🦊');
+    setConfirmDelete(false); setPinSetting('');
   }
 
-  function selectProfile(profile) {
+  async function selectProfile(profile) {
+    const r = await fetch(`${window.API_BASE_URL}/profiles/${profile.id}/verify-pin`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pin: ''})
+    });
+    const d = await r.json().catch(() => ({verified: true, has_pin: false}));
+    if (d.has_pin) {
+      setPinTarget(profile); setPinInput(''); setPinError(false);
+    } else {
+      _doSelectProfile(profile);
+    }
+  }
+
+  function _doSelectProfile(profile) {
     localStorage.setItem('currentProfileId', String(profile.id));
     window.currentProfile = profile; window.currentProfileId = profile.id;
     onSelect(profile);
+  }
+
+  async function submitPin() {
+    if (!pinTarget || !pinInput) return;
+    const r = await fetch(`${window.API_BASE_URL}/profiles/${pinTarget.id}/verify-pin`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pin: pinInput})
+    });
+    const d = await r.json().catch(() => ({verified: false}));
+    if (d.verified) { _doSelectProfile(pinTarget); setPinTarget(null); }
+    else { setPinError(true); setPinInput(''); }
+  }
+
+  async function savePinFromEdit() {
+    if (!editing) return;
+    await fetch(`${window.API_BASE_URL}/profiles/${editing.id}/pin`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pin: pinSetting})
+    });
+    setPinSetting('');
   }
 
   const S = {
@@ -143,6 +182,17 @@ function ProfilePicker({ onSelect, onClose }) {
           <button onClick={saveEdit} style={S.btnPrimary}>Save</button>
           <button onClick={resetForm} style={S.btnGlass}>Cancel</button>
         </div>
+        <div style={{width:'100%',borderTop:'1px solid rgba(255,255,255,.08)',paddingTop:'16px'}}>
+          <p style={{color:'rgba(255,255,255,.4)',fontSize:'12px',margin:'0 0 8px',textAlign:'center'}}>
+            Profile PIN (leave blank to remove)
+          </p>
+          <div style={{display:'flex',gap:'8px'}}>
+            <input type="password" inputMode="numeric" maxLength={8}
+              value={pinSetting} onChange={e=>setPinSetting(e.target.value)}
+              placeholder="New PIN" style={{...S.input,flex:1,textAlign:'center'}}/>
+            <button onClick={savePinFromEdit} style={S.btnGlass}>Set</button>
+          </div>
+        </div>
         {profiles.length > 1 && (
           <div style={{marginTop:'8px',width:'100%',textAlign:'center'}}>
             {confirmDelete
@@ -159,6 +209,24 @@ function ProfilePicker({ onSelect, onClose }) {
                 </button>}
           </div>
         )}
+      </div>
+    </div>
+  );
+
+  if (pinTarget) return (
+    <div style={S.wrap}>
+      <span style={{fontSize:'64px',lineHeight:1,marginBottom:'8px'}}>{pinTarget.avatar}</span>
+      <h1 style={{fontSize:'22px',fontWeight:600,marginBottom:'4px',color:'#fff'}}>{pinTarget.name}</h1>
+      <p style={{fontSize:'13px',color:'rgba(255,255,255,.45)',margin:'0 0 28px'}}>Enter PIN to continue</p>
+      <input autoFocus type="password" inputMode="numeric" maxLength={8}
+        value={pinInput} onChange={e=>{setPinInput(e.target.value);setPinError(false);}}
+        onKeyDown={e=>e.key==='Enter'&&submitPin()}
+        placeholder="••••"
+        style={{...S.input, maxWidth:'200px', textAlign:'center', fontSize:'24px', letterSpacing:'.3em'}}/>
+      {pinError && <p style={{color:'#ff6b6b',fontSize:'13px',margin:'8px 0 0'}}>Incorrect PIN</p>}
+      <div style={{display:'flex',gap:'10px',marginTop:'20px'}}>
+        <button onClick={submitPin} style={S.btnPrimary}>Unlock</button>
+        <button onClick={()=>setPinTarget(null)} style={S.btnGlass}>Back</button>
       </div>
     </div>
   );
@@ -213,12 +281,14 @@ function makeHero(item, i) {
 
 /* ── Row layout + tab config ─────────────────────────────────────────────── */
 const ROW_CONFIG = {
-  tr:  { layout: 'portrait',  tabs: ['home'],                    label: "What's Hot" },
-  rec: { layout: 'portrait',  tabs: ['home'],                    label: 'Recommended For You' },
-  mv:  { layout: 'landscape', tabs: ['home', 'movies'],          label: 'Popular Movies' },
-  tv:  { layout: 'landscape', tabs: ['home', 'series'],          label: 'TV Shows' },
-  an:  { layout: 'landscape', tabs: ['home', 'anime'],           label: 'Anime' },
-  cont:{ layout: 'continue',  tabs: ['home', 'movies', 'series'],label: 'Continue Watching' },
+  tr:     { layout: 'portrait',  tabs: ['home'],                    label: "What's Hot" },
+  top10:  { layout: 'top10',     tabs: ['home'],                    label: 'Top 10 in the US Today' },
+  rec:    { layout: 'portrait',  tabs: ['home'],                    label: 'Recommended For You' },
+  coming: { layout: 'portrait',  tabs: ['home'],                    label: 'Coming Soon' },
+  mv:     { layout: 'landscape', tabs: ['home', 'movies'],          label: 'Popular Movies' },
+  tv:     { layout: 'landscape', tabs: ['home', 'series'],          label: 'TV Shows' },
+  an:     { layout: 'landscape', tabs: ['home', 'anime'],           label: 'Anime' },
+  cont:   { layout: 'continue',  tabs: ['home', 'movies', 'series'],label: 'Continue Watching' },
 };
 
 /* ── Genre rows inline on non-home tabs ─────────────────────────────────── */
@@ -292,6 +362,7 @@ function App() {
   const [profileReady, setProfileReady] = React.useState(() => !!localStorage.getItem('currentProfileId'));
   const [showPicker, setShowPicker] = React.useState(false);
   const [, forceUpdate] = React.useState(0);
+  const [recsRow, setRecsRow] = React.useState(null);
 
   const bgRef = React.useRef(null);
   const overTimerRef = React.useRef(null);
@@ -345,6 +416,27 @@ function App() {
       })
       .catch(() => {});
   }, [dataLoaded, profileReady]);
+
+  /* ── "Because you watched X" lazy row ──── */
+  React.useEffect(() => {
+    if (!dataLoaded || contItems.length === 0) return;
+    const ref = contItems[0];
+    if (!ref?.id) return;
+    const [type, id] = ref.id.split('_');
+    fetch(`${window.API_BASE_URL}/recommendations/${type}/${id}`)
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success || !d.data?.length) return;
+        d.data.forEach(item => { ITEMS[item.id] = item; });
+        setRecsRow({
+          id: 'becauseOf',
+          label: `Because You Watched: ${ref.title}`,
+          layout: 'portrait',
+          items: d.data.map(i => i.id),
+        });
+      })
+      .catch(() => {});
+  }, [dataLoaded, contItems.length]);
 
   /* ── matchMedia compact toggle ──── */
   React.useEffect(() => {
@@ -531,6 +623,7 @@ function App() {
           ) : (
             <React.Fragment>
               {rows.map(r => <Row key={r.id} row={r} onOpen={openItem}/>)}
+              {tab === 'home' && recsRow && <Row key="recs" row={recsRow} onOpen={openItem}/>}
               {tab !== 'home' && <GenreTabRows tab={tab} onOpen={openItem}/>}
             </React.Fragment>
           )}

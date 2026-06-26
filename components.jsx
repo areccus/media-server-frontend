@@ -29,23 +29,6 @@ function useSheen() {
   return { ref, onMouseMove: onMove };
 }
 
-/* ── Portrait poster card ────────────────────────────────────────────────── */
-function PortraitCard({ item, onOpen }) {
-  const s = useSheen();
-  const src = posterUrl(item);
-  return (
-    <div className="card card--portrait" style={{'--cardglow': item.tone}}
-         ref={s.ref} onMouseMove={s.onMouseMove} onClick={() => onOpen && onOpen(item)}>
-      <div className="card__inner">
-        <img className="art" loading="lazy" decoding="async" src={src} alt={item.title} draggable="false"
-             style={src ? null : {background: item.tone}}/>
-        <div className="card__sheen"></div>
-        <div className="card__gloss"></div>
-      </div>
-      <div className="card__glow"></div>
-    </div>
-  );
-}
 
 /* ── Landscape card (16/10 style) ────────────────────────────────────────── */
 function LandscapeCard({ item, onOpen }) {
@@ -409,13 +392,14 @@ function Row({ row, onOpen, onSeeAll }) {
     t.scrollBy({left: dir * Math.min(t.clientWidth * 0.82, 760), behavior: 'smooth'});
   }
 
+  const isTop10 = row.layout === 'top10';
   const CardComp = row.layout === 'portrait' ? PortraitCard
     : row.layout === 'continue' ? ContinueCard
     : row.layout === 'sport' ? SportCard
     : LandscapeCard;
 
   return (
-    <section className="row">
+    <section className={'row' + (isTop10 ? ' row--top10' : '')}>
       <div className="row__head">
         <h2 className="row__title">{row.label}</h2>
         <button className="row__all" onClick={() => {
@@ -430,6 +414,7 @@ function Row({ row, onOpen, onSeeAll }) {
           {(row.items || []).map((it, i) => {
             const item = typeof it === 'string' ? ITEMS[it] : it;
             if (!item) return null;
+            if (isTop10) return <Top10Card key={(item.id || i)} item={item} rank={i + 1} onOpen={onOpen}/>;
             return <CardComp key={(item.id || i)} item={item} onOpen={onOpen}/>;
           })}
         </div>
@@ -497,6 +482,89 @@ function useBreakpoint() {
   return 'tv';
 }
 
+/* ── Top 10 card ─────────────────────────────────────────────────────────── */
+function Top10Card({ item, rank, onOpen }) {
+  const s = useSheen();
+  const src = posterUrl(item);
+  return (
+    <div className="card card--top10" style={{'--cardglow': item.tone}}
+         ref={s.ref} onMouseMove={s.onMouseMove} onClick={() => onOpen && onOpen(item)}>
+      <div className="top10-num">{rank}</div>
+      <div className="card__inner">
+        <img className="art" loading="lazy" decoding="async" src={src} alt={item.title} draggable="false"/>
+        <div className="card__sheen"></div>
+        <div className="card__gloss"></div>
+      </div>
+      <div className="card__glow"></div>
+    </div>
+  );
+}
+
+/* ── Detect non-touch desktop for trailer / download badge ───────────────── */
+const _IS_TOUCH = ('ontouchstart' in window) ||
+  (/iPad|iPhone|iPod|Android/.test(navigator.userAgent)) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+/* ── Portrait card with trailer hover (desktop) + download badge ─────────── */
+function PortraitCard({ item, onOpen }) {
+  const s = useSheen();
+  const src = posterUrl(item);
+  const [trailerKey, setTrailerKey] = useState(null);
+  const [showTrailer, setShowTrailer] = useState(false);
+  const hoverTimer = useRef(null);
+  const itemRef = useRef(item);
+  itemRef.current = item;
+
+  function onEnter() {
+    if (_IS_TOUCH) return;
+    hoverTimer.current = setTimeout(() => {
+      const cur = itemRef.current;
+      const [type, id] = cur.id.split('_');
+      fetch(`${window.API_BASE_URL}/trailer/${type}/${id}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.key && itemRef.current.id === cur.id) {
+            setTrailerKey(d.key);
+            setShowTrailer(true);
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+  }
+
+  function onLeave() {
+    clearTimeout(hoverTimer.current);
+    setShowTrailer(false);
+    setTrailerKey(null);
+  }
+
+  const isCached = window.cachedSet?.has(item.id);
+
+  return (
+    <div className="card card--portrait" style={{'--cardglow': item.tone}}
+         ref={s.ref} onMouseMove={s.onMouseMove}
+         onMouseEnter={onEnter} onMouseLeave={onLeave}
+         onClick={() => onOpen && onOpen(item)}>
+      <div className="card__inner">
+        <img className="art" loading="lazy" decoding="async" src={src} alt={item.title} draggable="false"
+             style={src ? null : {background: item.tone}}/>
+        {showTrailer && trailerKey && (
+          <div className="trailer-overlay">
+            <iframe
+              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&controls=0&loop=1&playlist=${trailerKey}&modestbranding=1`}
+              allow="autoplay; encrypted-media" allowFullScreen frameBorder="0"
+              style={{width:'100%',height:'100%',border:'none'}}/>
+          </div>
+        )}
+        {isCached && <div className="dl-badge" title="Downloaded">↓</div>}
+        <div className="card__sheen"></div>
+        <div className="card__gloss"></div>
+      </div>
+      <div className="card__glow"></div>
+    </div>
+  );
+}
+
 /* ── CategoryCard — alias for library/pages compatibility ────────────────── */
 function CategoryCard({ item, onOpen, glowMode, glowIntensity, cardRadius }) {
   return <PortraitCard item={item} onOpen={onOpen}/>;
@@ -506,6 +574,7 @@ function CategoryCard({ item, onOpen, glowMode, glowIntensity, cardRadius }) {
 Object.assign(window, {
   Icon, useSheen,
   PortraitCard, LandscapeCard, ContinueCard, CategoryCard,
+  Top10Card,
   SportTeam, SportCard, LEAGUE_ICONS_MAP,
   HeroBg, Hero,
   TopNav, MobileTop, BottomBar, TABS, TAB_GENRES, GENRE_GRADIENTS, GenreCatCard,
