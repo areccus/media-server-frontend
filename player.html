@@ -1027,11 +1027,13 @@ volRange.addEventListener('input', () => {
 const _isIOS  = /iphone|ipad|ipod/i.test(navigator.userAgent);
 
 function _applyOrientation() {
-  // window.orientation: 0=portrait-up, 180=portrait-down, 90=landscape-right, -90=landscape-left
-  // We want the player to ALWAYS appear landscape.
-  // In true landscape (±90°) no rotation needed — just fill the screen normally.
-  // In portrait (0° or 180°) we rotate #wrap so it appears landscape.
-  const angle = typeof window.orientation === 'number' ? window.orientation : 0;
+  // window.orientation is only defined on mobile — undefined on desktop.
+  // If it's not a number the player is on a real screen; leave it alone.
+  if (typeof window.orientation !== 'number') return;
+
+  // 0=portrait-up, 180=portrait-down, ±90=landscape.
+  // We want the player to ALWAYS appear landscape on mobile.
+  const angle = window.orientation;
   const isPortrait = angle === 0 || angle === 180;
 
   if (isPortrait) {
