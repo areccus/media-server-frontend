@@ -1673,8 +1673,13 @@ async function init() {
 
   } catch (err) {
     console.error('Extraction failed:', err);
-    const relayed = await tryCaptchaRelay();
-    if (relayed) return;
+    // 500 = backend couldn't find any working stream (DMCA stubs, no rips yet, etc.)
+    // Auto-fall back to the VidSrc embed silently rather than showing an error screen.
+    if (embedSrc && (err.message.includes('500') || err.message === 'NO_SOURCE')) {
+      console.log('No streams found — auto-falling back to VidSrc embed');
+      useEmbed();
+      return;
+    }
     if (err.message === 'NO_SOURCE') {
       showError('No sources found for this title.\n\nIt may not be available yet — try again in a moment.');
     } else if (err.message === 'TIMEOUT') {
@@ -1684,7 +1689,6 @@ async function init() {
     } else if (err.message.includes('fetch') || err.message.includes('NetworkError') || err.message.includes('Failed to fetch')) {
       showError('Network error — check your connection and try again.');
     } else if (err.message.includes('pattern') || err.message.includes('JSON') || err.message.includes('SyntaxError')) {
-      // WebKit JSON parse error — backend returned non-JSON (tunnel down / CF error page)
       showError('Server returned an unexpected response.\n\nThe Cloudflare tunnel may be down — restart the backend.');
     } else {
       showError(`Could not load a stream.\n${err.message}`);
