@@ -313,6 +313,9 @@
     .q-item.active { color:#5BB7FF; }
     .q-item.active::before { content:''; display:block; width:5px; height:5px; background:#5BB7FF; border-radius:50%; flex-shrink:0; }
     .q-item:not(.active)::before { content:''; display:block; width:5px; height:5px; flex-shrink:0; }
+    .q-sub { margin-top:6px; border-top:1px solid rgba(255,255,255,.08); padding-top:8px; }
+    .q-seed { font-size:11px; color:rgba(255,255,255,.35); margin-left:auto; }
+    #source-menu { max-height:340px; overflow-y:auto; }
 
     /* ── Click-flash (big play/pause icon) ───────────────────────────── */
     #flash {
@@ -508,12 +511,25 @@
       color:rgba(255,255,255,.28);
       white-space:nowrap;
     }
+    /* Native browser subtitle rendering */
+    ::cue {
+      background-color: rgba(0,0,0,0.62);
+      color: #fff;
+      font-size: 1.15em;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 500;
+      line-height: 1.45;
+      text-shadow: 0 1px 3px rgba(0,0,0,0.95);
+    }
+    /* CC button — glows accent when subtitles are on, fades when off */
+    #btn-cc { color: #a78bfa; }
+    #btn-cc.cc-off { opacity: 0.35; color: #fff; }
   </style>
 </head>
 <body>
 
 <div id="wrap">
-  <video id="vid" playsinline></video>
+  <video id="vid" playsinline autoplay muted></video>
 
   <!-- Buffering -->
   <div id="buf"><div class="spin"></div></div>
@@ -655,8 +671,18 @@
             <div class="q-label">Source</div>
             <button class="q-item active" id="src-debrid" onclick="selectSource('debrid')">Real-Debrid</button>
             <button class="q-item" id="src-vidsrc" onclick="selectSource('vidsrc')">VidSrc Embed</button>
+            <div id="src-list" style="display:none">
+              <div class="q-label q-sub">Streams</div>
+            </div>
           </div>
         </div>
+
+        <!-- Subtitles (CC) -->
+        <button class="ibtn" id="btn-cc" title="Subtitles" onclick="toggleCC()">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M19 4H5c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9v-1H7v4h2v-1h2v2H7c-1.1 0-2-.9-2-2v-2c0-1.1.9-2 2-2h4v2zm7 0h-2v-1h-2v4h2v-1h2v2h-4c-1.1 0-2-.9-2-2v-2c0-1.1.9-2 2-2h4v2z"/>
+          </svg>
+        </button>
 
         <!-- Fullscreen -->
         <button class="ibtn" id="btn-fs" onclick="toggleFS()" title="Fullscreen (F)">
@@ -761,6 +787,24 @@ const isEp      = season > 0 && episode > 0;
 
 const vid  = document.getElementById('vid');
 const wrap = document.getElementById('wrap');
+
+// ── Device class detection ────────────────────────────────────────────────
+function detectDeviceClass() {
+  const ua = navigator.userAgent;
+  if (/iPhone|iPad|iPod/.test(ua)) {
+    return /OS 1[5-9]_|OS [2-9]\d_/.test(ua) ? 'ios_modern' : 'ios';
+  }
+  if (/Macintosh/.test(ua)) return 'mac';
+  if (/Android/.test(ua))   return 'mobile';
+  return 'web';
+}
+const _deviceClass = detectDeviceClass();
+
+// ── Stream list state ─────────────────────────────────────────────────────
+let _streamList     = [];
+let _activeStreamIdx = -1;
+let _stallWatchTimer = null;
+let _stallWatchUrl   = '';
 
 // ── Title display ─────────────────────────────────────────────────────────
 document.getElementById('media-title').textContent = decodeURIComponent(titleRaw);
@@ -1165,6 +1209,7 @@ let activeHls = null;
 let _slowHint = null;
 let _resumeAt = 0; // seconds to seek after video metadata loads
 let _knownDuration = 0; // real duration from ffprobe (overrides vid.duration for fMP4 streams)
+let _initMuted = true; // unmuted on first loadStream() call (needed for autoplay)
 
 // ── Episode watched tracking ───────────────────────────────────────────────
 // An episode counts as "watched" after 5 continuous minutes of real playback.
@@ -1291,6 +1336,84 @@ function toggleSourceMenu() {
   if (!wasOpen) m.classList.add('open');
 }
 
+// ── Stream list: fetch, render, select ───────────────────────────────────
+async function loadStreamList() {
+  try {
+    const qs = new URLSearchParams({ device: _deviceClass, limit: 10 });
+    if (isEp) { qs.set('season', season); qs.set('episode', episode); }
+    const res  = await fetch(`${API}/stream/list/${mediaType}/${mediaId}?${qs}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (!data.success || !data.data?.length) return;
+    _streamList = data.data;
+    renderStreamList();
+  } catch (_) {}
+}
+
+function renderStreamList() {
+  const el = document.getElementById('src-list');
+  if (!el || !_streamList.length) return;
+  el.innerHTML = '<div class="q-label q-sub">Streams</div>';
+  _streamList.forEach((s, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'q-item' + (i === _activeStreamIdx ? ' active' : '');
+    btn.onclick   = () => selectStream(i);
+    const lbl  = document.createElement('span');
+    lbl.textContent = s.label;
+    btn.appendChild(lbl);
+    if (s.seeders) {
+      const seed = document.createElement('span');
+      seed.className   = 'q-seed';
+      seed.textContent = `👤${s.seeders}`;
+      btn.appendChild(seed);
+    }
+    el.appendChild(btn);
+  });
+  el.style.display = 'block';
+}
+
+async function selectStream(i) {
+  if (i < 0 || i >= _streamList.length) return;
+  _activeStreamIdx = i;
+  const s = _streamList[i];
+  document.getElementById('source-menu').classList.remove('open');
+  renderStreamList();
+  const pos = isNaN(vid.currentTime) ? 0 : vid.currentTime;
+  if (activeHls) { activeHls.destroy(); activeHls = null; }
+  loadStream(s.stream_url, s.filename || '', pos, 0);
+}
+
+function _armProgressiveStallWatch(srcUrl, filename) {
+  clearTimeout(_stallWatchTimer);
+  _stallWatchUrl = srcUrl;
+  let lastPos = -1;
+  let stallSince = 0;
+  function _tick() {
+    if (vid.paused || vid.ended) { _stallWatchTimer = setTimeout(_tick, 4000); return; }
+    const cur = vid.currentTime;
+    if (Math.abs(cur - lastPos) < 0.2) {
+      if (!stallSince) stallSince = Date.now();
+      if (Date.now() - stallSince > 10000) {
+        console.warn('Stall detected >10s — trying next stream');
+        stallSince = 0;
+        const nextIdx = _activeStreamIdx + 1;
+        if (nextIdx < _streamList.length) {
+          selectStream(nextIdx);
+          return;
+        } else if (_streamList.length && _activeStreamIdx === -1) {
+          selectStream(0);
+          return;
+        }
+      }
+    } else {
+      stallSince = 0;
+    }
+    lastPos = cur;
+    _stallWatchTimer = setTimeout(_tick, 2000);
+  }
+  _stallWatchTimer = setTimeout(_tick, 4000);
+}
+
 let _currentSource = 'debrid';
 function selectSource(src) {
   document.getElementById('source-menu').classList.remove('open');
@@ -1412,13 +1535,51 @@ function useEmbed() {
   `;
 }
 
+// ── Subtitles ─────────────────────────────────────────────────────────────
+let _subsEnabled = true;
+
+function loadSubtitles() {
+  // Remove any existing subtitle track from a previous load
+  vid.querySelectorAll('track[data-halo-subs]').forEach(t => t.remove());
+
+  const src = `${API}/subtitles/${mediaType}/${mediaId}`
+              + (isEp ? `?season=${season}&episode=${episode}` : '');
+  const track = document.createElement('track');
+  track.setAttribute('data-halo-subs', '1');
+  track.kind    = 'subtitles';
+  track.label   = 'English';
+  track.srclang = 'en';
+  track.src     = src;
+  track.default = true;
+  vid.appendChild(track);
+
+  // Browsers don't reliably honour the `default` attribute — force showing
+  function applyMode() {
+    for (const t of vid.textTracks) {
+      if (t.language === 'en') { t.mode = _subsEnabled ? 'showing' : 'hidden'; break; }
+    }
+  }
+  track.addEventListener('load', applyMode);
+  setTimeout(applyMode, 600); // fallback for browsers that skip the load event
+}
+
+function toggleCC() {
+  _subsEnabled = !_subsEnabled;
+  for (const t of vid.textTracks) t.mode = _subsEnabled ? 'showing' : 'hidden';
+  document.getElementById('btn-cc').classList.toggle('cc-off', !_subsEnabled);
+}
+
 // ── HLS.js / native loader ────────────────────────────────────────────────
 function loadStream(url, filename, resumeAt, duration) {
   if (duration > 0) _knownDuration = duration;
+  // Unmute on first real stream load — video starts muted (for autoplay unlock)
+  // then plays with audio immediately when the src is set.
+  if (_initMuted) { vid.muted = false; _initMuted = false; }
   clearTimeout(_slowHint);
   finishProgress();
   document.getElementById('loading').style.display = 'none';
   showCtrls();
+  loadSubtitles();   // fetch English subtitles from backend, inject as <track>
   if (isEp) setTimeout(prefetchNextEpisode, 60_000);
   setTimeout(triggerSsdCache, 90_000);   // after 90s, start background SSD download
 
@@ -1509,9 +1670,10 @@ function loadStream(url, filename, resumeAt, duration) {
     vid.addEventListener('playing', () => clearTimeout(_nativeHlsRecoveryTimer));
     vid.play().catch(() => {});
   } else if (!isHLS) {
-    // MKV streams are remuxed to MP4 by the proxy — just load the proxied URL.
+    // Progressive MP4/MKV — load directly and arm stall recovery
     vid.src = srcUrl;
     vid.play().catch(() => {});
+    _armProgressiveStallWatch(srcUrl, filename);
   } else {
     showError('HLS.js failed to load. Try the VidSrc embed instead.');
   }
@@ -1627,11 +1789,12 @@ async function init() {
     const qs = new URLSearchParams();
     if (isEp) { qs.set('season', season); qs.set('episode', episode); }
     if (imdbId) qs.set('imdbId', imdbId);
+    qs.set('device', _deviceClass);
 
     // Fetch stream URL and saved progress in parallel — progress is a fast DB lookup
     // and will be done long before the 15 s stream extraction completes
     const [res, savedProgress] = await Promise.all([
-      fetch(`${API}/stream/${mediaType}/${mediaId}?${qs}`),
+      fetch(`${API}/stream/${mediaType}/${mediaId}?${qs}`, { signal: AbortSignal.timeout(30000) }),
       fetch(`${API}/progress/${mediaType}/${mediaId}?profile_id=${profileId}`)
         .then(r => r.json())
         .catch(() => null),
@@ -1665,22 +1828,32 @@ async function init() {
     }
 
     loadStream(data.data.stream_url, data.data.filename || '', resumeAt, data.data.duration || 0);
+    setTimeout(loadStreamList, 1500);
 
     // For non-MKV streams, seek via currentTime after metadata loads
-    if (resumeAt > 4) {
+    if (!startOver && resumeAt > 4) {
       _resumeAt = resumeAt;
+    }
+
+    // When starting over, wipe the saved progress from the DB so the detail
+    // page shows "Play" instead of "Resume" on the next visit.
+    if (startOver) {
+      fetch(`${API}/progress/delete/${mediaType}/${mediaId}`, { method: 'DELETE' }).catch(() => {});
+      console.log('Start Over: progress cleared');
     }
 
   } catch (err) {
     console.error('Extraction failed:', err);
     // 500 = backend couldn't find any working stream (DMCA stubs, no rips yet, etc.)
     // Auto-fall back to the VidSrc embed silently rather than showing an error screen.
-    if (embedSrc && (err.message.includes('500') || err.message === 'NO_SOURCE')) {
+    if (embedSrc && (err.message.includes('500') || err.message === 'NO_SOURCE' || err.name === 'TimeoutError')) {
       console.log('No streams found — auto-falling back to VidSrc embed');
       useEmbed();
       return;
     }
-    if (err.message === 'NO_SOURCE') {
+    if (err.name === 'TimeoutError') {
+      showError('Stream extraction timed out.\n\nTry again or use the VidSrc button above.');
+    } else if (err.message === 'NO_SOURCE') {
       showError('No sources found for this title.\n\nIt may not be available yet — try again in a moment.');
     } else if (err.message === 'TIMEOUT') {
       showError('The server took too long to respond.\n\nThe backend may be busy — try again in a few seconds.');
