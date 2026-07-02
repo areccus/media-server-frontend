@@ -138,7 +138,7 @@ function DetailPage({ mediaType, mediaId }) {
     const idParam = item.imdb_id ? `imdbId=${item.imdb_id}` : `tmdbId=${item.tmdb_id}`;
     const posterP   = encodeURIComponent(item.poster   || '');
     const backdropP = encodeURIComponent(item.backdrop || '');
-    const toneP     = encodeURIComponent(item.tone     || '#5BB7FF');
+    const toneP     = encodeURIComponent(item.tone     || '#2f86ff');
     const soParam   = startOver ? '&startOver=1' : '';
     const genreP    = encodeURIComponent(item.genre || '');
     window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${epTitle}&src=${encodeURIComponent(src)}&season=${seasonNum}&episode=${episodeNum}&totalEpisodes=${totalEpisodes}&${idParam}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}&genre=${genreP}${soParam}`;
@@ -201,7 +201,7 @@ function DetailPage({ mediaType, mediaId }) {
             title: item.title,
             poster: item.poster || '',
             backdrop: item.backdrop || '',
-            tone: item.tone || '#5BB7FF'
+            tone: item.tone || '#2f86ff'
           })
         });
         setInList(true);
@@ -365,7 +365,7 @@ function DetailPage({ mediaType, mediaId }) {
                   } else {
                     const posterP   = encodeURIComponent(item.poster   || '');
                     const backdropP = encodeURIComponent(item.backdrop || '');
-                    const toneP     = encodeURIComponent(item.tone     || '#5BB7FF');
+                    const toneP     = encodeURIComponent(item.tone     || '#2f86ff');
                     const idKey2    = item.imdb_id ? `imdb=${item.imdb_id}` : `tmdb=${item.tmdb_id}`;
                     const embedSrc  = `https://vidsrc-embed.ru/embed/movie?${idKey2}`;
                     const imdbParam = item.imdb_id ? `&imdbId=${item.imdb_id}` : '';
@@ -390,7 +390,7 @@ function DetailPage({ mediaType, mediaId }) {
                     } else {
                       const posterP   = encodeURIComponent(item.poster   || '');
                       const backdropP = encodeURIComponent(item.backdrop || '');
-                      const toneP     = encodeURIComponent(item.tone     || '#5BB7FF');
+                      const toneP     = encodeURIComponent(item.tone     || '#2f86ff');
                       const idKey2    = item.imdb_id ? `imdb=${item.imdb_id}` : `tmdb=${item.tmdb_id}`;
                       const embedSrc  = `https://vidsrc-embed.ru/embed/movie?${idKey2}`;
                       const imdbParam = item.imdb_id ? `&imdbId=${item.imdb_id}` : '';

@@ -198,7 +198,7 @@ function Hero({ hero, heroList, heroIdx, setHeroIdx, nav, paused, setPaused }) {
         await fetch(`${window.API_BASE_URL}/list/add`, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ profile_id: pid, media_id: heroId, media_type: heroType,
-            title: hero.title, poster: hero.poster || '', backdrop: hero.backdrop || '', tone: hero.tone || '#5BB7FF' })
+            title: hero.title, poster: hero.poster || '', backdrop: hero.backdrop || '', tone: hero.tone || '#2f86ff' })
         });
         setInList(true);
       }

@@ -135,20 +135,35 @@ function ProfilePicker({ onSelect, onClose }) {
     setPinSetting('');
   }
 
+  // Deterministic tile gradient per profile — same profile always gets the
+  // same color across sessions and devices (keyed on id).
+  const TILE_GRADS = [
+    ['#2f86ff', '#5468ff'],   // halo blue
+    ['#e0526e', '#f2a04b'],   // sunset
+    ['#12a887', '#43dd83'],   // emerald
+    ['#7d3fe0', '#4a4de0'],   // violet
+    ['#e0508f', '#8c3fb8'],   // magenta
+    ['#2aa8d8', '#2f6de0'],   // ocean
+  ];
+  const gradFor = (id) => TILE_GRADS[Math.abs(id) % TILE_GRADS.length];
+
   const S = {
-    wrap: {position:'fixed',inset:0,background:'rgba(6,8,12,0.97)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'32px 16px'},
-    card: (hov) => ({background:hov?'rgba(255,255,255,.07)':'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'16px',padding:'28px 20px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'12px',width:'130px',minHeight:'130px',transition:'background .15s, transform .15s',transform:hov?'translateY(-4px)':'none',color:'#fff',position:'relative'}),
-    input: {width:'100%',padding:'12px 16px',background:'rgba(255,255,255,.07)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'10px',color:'#fff',fontSize:'16px',fontFamily:'inherit',outline:'none'},
-    btnPrimary: {padding:'10px 28px',background:'#5BB7FF',color:'#06080c',border:'none',borderRadius:'8px',fontSize:'14px',fontWeight:600,cursor:'pointer',fontFamily:'inherit'},
-    btnGlass: {padding:'10px 28px',background:'rgba(255,255,255,.08)',color:'#fff',border:'1px solid rgba(255,255,255,.14)',borderRadius:'8px',fontSize:'14px',cursor:'pointer',fontFamily:'inherit'},
-    btnDanger: {padding:'10px 28px',background:'rgba(220,50,50,.15)',color:'#ff6b6b',border:'1px solid rgba(220,50,50,.3)',borderRadius:'8px',fontSize:'14px',cursor:'pointer',fontFamily:'inherit'},
+    wrap: {position:'fixed',inset:0,background:'radial-gradient(120% 100% at 50% 0%, #0d1017 0%, #06080c 70%)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'32px 16px',overflowY:'auto'},
+    title: {fontSize:'clamp(28px, 4vw, 40px)',fontWeight:500,marginBottom:'48px',color:'#fff',letterSpacing:'.01em'},
+    tile: (id, hov) => ({width:'116px',height:'116px',borderRadius:'18px',padding:0,cursor:'pointer',display:'grid',placeItems:'center',background:`linear-gradient(135deg, ${gradFor(id)[0]}, ${gradFor(id)[1]})`,border:hov?'2.5px solid rgba(255,255,255,.95)':'2.5px solid transparent',transform:hov?'scale(1.07)':'scale(1)',transition:'transform .18s cubic-bezier(.22,.61,.36,1), border-color .18s, box-shadow .18s',boxShadow:hov?'0 20px 44px -14px rgba(0,0,0,.75)':'0 10px 28px -16px rgba(0,0,0,.6)'}),
+    tileAdd: (hov) => ({width:'116px',height:'116px',borderRadius:'18px',padding:0,cursor:'pointer',display:'grid',placeItems:'center',background:hov?'rgba(255,255,255,.06)':'transparent',border:`2px dashed rgba(255,255,255,${hov?'.5':'.22'})`,transform:hov?'scale(1.05)':'scale(1)',transition:'transform .18s cubic-bezier(.22,.61,.36,1), border-color .18s, background .18s'}),
+    name: (hov) => ({fontSize:'15px',fontWeight:500,color:hov?'#fff':'rgba(255,255,255,.55)',transition:'color .15s',maxWidth:'116px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textAlign:'center'}),
+    input: {width:'100%',padding:'13px 16px',background:'rgba(255,255,255,.07)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'12px',color:'#fff',fontSize:'16px',fontFamily:'inherit',outline:'none'},
+    btnPrimary: {padding:'11px 30px',background:'linear-gradient(135deg, #2f86ff, #5468ff)',color:'#fff',border:'none',borderRadius:'999px',fontSize:'14px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'},
+    btnGlass: {padding:'11px 30px',background:'rgba(255,255,255,.08)',color:'#fff',border:'1px solid rgba(255,255,255,.14)',borderRadius:'999px',fontSize:'14px',cursor:'pointer',fontFamily:'inherit'},
+    btnDanger: {padding:'11px 30px',background:'rgba(220,50,50,.15)',color:'#ff6b6b',border:'1px solid rgba(220,50,50,.3)',borderRadius:'999px',fontSize:'14px',cursor:'pointer',fontFamily:'inherit'},
   };
 
   const avatarGrid = (
     <div style={{display:'flex',flexWrap:'wrap',gap:'10px',justifyContent:'center'}}>
       {AVATARS.map(a => (
         <button key={a} onClick={() => setFormAvatar(a)}
-          style={{fontSize:'28px',cursor:'pointer',background:'none',border:'none',padding:'6px',borderRadius:'8px',lineHeight:1,outline:formAvatar===a?'2px solid #5BB7FF':'none'}}>
+          style={{fontSize:'28px',cursor:'pointer',background:'none',border:'none',padding:'6px',borderRadius:'8px',lineHeight:1,outline:formAvatar===a?'2px solid #2f86ff':'none'}}>
           {a}
         </button>
       ))}
@@ -233,34 +248,45 @@ function ProfilePicker({ onSelect, onClose }) {
 
   return (
     <div style={S.wrap}>
-      <h1 style={{fontSize:'28px',fontWeight:600,marginBottom:'40px',color:'#fff',letterSpacing:'-.01em'}}>Who's Watching?</h1>
-      <div style={{display:'flex',flexWrap:'wrap',gap:'16px',justifyContent:'center',maxWidth:'680px',padding:'12px'}}>
-        {profiles.map(p => (
-          <div key={p.id} style={{position:'relative'}}
-            onMouseEnter={()=>setHoveredId(p.id)} onMouseLeave={()=>setHoveredId(null)}>
-            <button style={S.card(hoveredId===p.id)} onClick={()=>selectProfile(p)}>
-              <span style={{fontSize:'52px',lineHeight:1}}>{p.avatar}</span>
-              <span style={{fontSize:'14px',fontWeight:500}}>{p.name}</span>
-            </button>
-            <button className="profile-edit-btn" onClick={e=>openEdit(p,e)} aria-label={`Edit ${p.name}`}
-              style={{position:'absolute',top:'-10px',right:'-10px',width:'34px',height:'34px',borderRadius:'50%',background:'rgba(20,20,28,.88)',border:'1.5px solid rgba(255,255,255,.28)',color:'#fff',display:'grid',placeItems:'center',cursor:'pointer',padding:0,boxShadow:'0 2px 8px rgba(0,0,0,.5)',transition:'transform .15s, background .15s'}}>
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-              </svg>
-            </button>
-          </div>
-        ))}
-        <button style={S.card(hoveredId==='add')}
-          onMouseEnter={()=>setHoveredId('add')} onMouseLeave={()=>setHoveredId(null)}
-          onClick={()=>{ setFormName(''); setFormAvatar('🦊'); setMode('add'); }}>
-          <span style={{fontSize:'40px',lineHeight:1,color:'rgba(255,255,255,.4)'}}>+</span>
-          <span style={{fontSize:'14px',fontWeight:500,color:'rgba(255,255,255,.5)'}}>Add Profile</span>
-        </button>
+      <h1 style={S.title}>Who's watching?</h1>
+      <div style={{display:'flex',flexWrap:'wrap',gap:'32px 28px',justifyContent:'center',maxWidth:'760px',padding:'12px'}}>
+        {profiles.map(p => {
+          const hov = hoveredId === p.id;
+          return (
+            <div key={p.id} style={{position:'relative',display:'flex',flexDirection:'column',alignItems:'center',gap:'14px',width:'116px'}}
+              onMouseEnter={()=>setHoveredId(p.id)} onMouseLeave={()=>setHoveredId(null)}>
+              <button style={S.tile(p.id, hov)} onClick={()=>selectProfile(p)} aria-label={p.name}>
+                <span style={{fontSize:'54px',lineHeight:1,filter:'drop-shadow(0 4px 10px rgba(0,0,0,.35))'}}>{p.avatar}</span>
+              </button>
+              <span style={S.name(hov)}>{p.name}</span>
+              <button className="profile-edit-btn" onClick={e=>openEdit(p,e)} aria-label={`Edit ${p.name}`}
+                style={{position:'absolute',top:'-9px',right:'-9px',width:'32px',height:'32px',borderRadius:'50%',background:'rgba(14,16,22,.92)',border:'1.5px solid rgba(255,255,255,.28)',color:'#fff',display:'grid',placeItems:'center',cursor:'pointer',padding:0,boxShadow:'0 2px 8px rgba(0,0,0,.5)',transition:'transform .15s, background .15s',zIndex:2}}>
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                </svg>
+              </button>
+            </div>
+          );
+        })}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'14px',width:'116px'}}
+          onMouseEnter={()=>setHoveredId('add')} onMouseLeave={()=>setHoveredId(null)}>
+          <button style={S.tileAdd(hoveredId==='add')}
+            onClick={()=>{ setFormName(''); setFormAvatar('🦊'); setMode('add'); }} aria-label="Add profile">
+            <svg viewBox="0 0 24 24" width="34" height="34" fill="none"
+              stroke={hoveredId==='add' ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.4)'}
+              strokeWidth="1.8" strokeLinecap="round" style={{transition:'stroke .15s'}}>
+              <path d="M12 5v14M5 12h14"/>
+            </svg>
+          </button>
+          <span style={S.name(hoveredId==='add')}>Add Profile</span>
+        </div>
       </div>
       {onClose && (
         <button onClick={onClose}
-          style={{marginTop:'40px',background:'none',border:'none',color:'rgba(255,255,255,.35)',fontSize:'13px',cursor:'pointer',fontFamily:'inherit'}}>
+          style={{marginTop:'48px',background:'none',border:'1px solid rgba(255,255,255,.16)',borderRadius:'999px',padding:'9px 22px',color:'rgba(255,255,255,.45)',fontSize:'13px',cursor:'pointer',fontFamily:'inherit',transition:'color .15s, border-color .15s'}}
+          onMouseEnter={e=>{e.currentTarget.style.color='#fff';e.currentTarget.style.borderColor='rgba(255,255,255,.4)';}}
+          onMouseLeave={e=>{e.currentTarget.style.color='rgba(255,255,255,.45)';e.currentTarget.style.borderColor='rgba(255,255,255,.16)';}}>
           Continue as {window.currentProfile?.name || 'Guest'}
         </button>
       )}

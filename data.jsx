@@ -79,9 +79,11 @@ const CURRENT_HOST = window.location.hostname;
 
 // On HTTPS (Vercel/production) use same-origin immediately so no calls race
 // with detectBackendPort() and trigger mixed-content errors.
+// Local default is 5001 (gunicorn) — port 5000 is squatted by macOS AirPlay,
+// so any fetch racing ahead of detectBackendPort() would stall on it.
 let API_BASE_URL = window.location.protocol === 'https:'
   ? `${window.location.origin}/api`
-  : `http://${CURRENT_HOST}:5000/api`;
+  : `http://${CURRENT_HOST}:5001/api`;
 
 // ngrok free tier shows a browser interstitial for any request with a browser
 // User-Agent unless this header is present. Patch fetch globally so every API
@@ -325,7 +327,7 @@ async function fetchFresh(endpoint) {
  *     title: 'Media Server',
  *     synopsis: 'Configure your TMDB API key...',
  *     poster: 'https://picsum.photos/seed/placeholder/500/750',  (random image)
- *     tone: '#5BB7FF',  (nice blue color)
+ *     tone: '#2f86ff',  (nice blue color)
  *     ...
  *   }
  */
@@ -339,7 +341,7 @@ function getFallbackData(endpoint) {
     runtime: '2h 00m',
     genre: 'Drama',
     meta: 'Movie · 2024',
-    tone: '#5BB7FF',  // Nice blue color
+    tone: '#2f86ff',  // Nice blue color
     synopsis: 'Configure your TMDB API key in the backend .env file to load real content.',
     poster: 'https://picsum.photos/seed/placeholder/500/750',      // Random placeholder
     backdrop: 'https://picsum.photos/seed/placeholder-bd/1920/1080'  // Random backdrop

@@ -197,7 +197,7 @@ function CategoryCard({ item, glowMode, glowIntensity, cardRadius }) {
   const ref = useRef(null);
   const [hover, setHover] = useState(false);
   const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
-  const tone = glowMode === 'tone' ? item.tone : '#5BB7FF';
+  const tone = glowMode === 'tone' ? item.tone : '#2f86ff';
 
   function handleClick() {
     const [type, id] = item.id.split('_');

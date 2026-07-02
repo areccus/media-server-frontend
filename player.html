@@ -1641,7 +1641,9 @@ function loadStream(url, filename, resumeAt, duration) {
   if (isEp) setTimeout(prefetchNextEpisode, 60_000);
   setTimeout(triggerSsdCache, 90_000);   // after 90s, start background SSD download
 
-  const isHLS = url.includes('.m3u8');
+  // force_hls=1: backend routes Dolby/DTS audio through an AAC HLS transcode
+  // for browsers — treat it as HLS so hls.js (not the native <video>) loads it.
+  const isHLS = url.includes('.m3u8') || url.includes('force_hls=1');
 
   let srcUrl;
   if (url.includes('/api/stream/proxy')) {
