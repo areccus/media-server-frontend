@@ -378,6 +378,19 @@ function App() {
     Object.values(GENRE_ENDPOINT).forEach(ep => window.fetchWithCache(ep).catch(() => {}));
   }, []);
 
+  /* ── Real-Debrid expiry warning ──── */
+  const [rdWarning, setRdWarning] = React.useState(null);
+  React.useEffect(() => {
+    fetch(`${window.API_BASE_URL}/rd-status`)
+      .then(r => r.json())
+      .then(d => {
+        if (!d.enabled || d.premium === null) return;
+        if (!d.premium) { setRdWarning('expired'); return; }
+        if (d.days_left <= 5) setRdWarning(`${d.days_left}`);
+      })
+      .catch(() => {});
+  }, []);
+
   /* ── Load data ──── */
   React.useEffect(() => {
     async function load() {
@@ -570,7 +583,7 @@ function App() {
   if (route.page && route.page !== 'home' && routerPages[route.page]) {
     return (
       <React.Fragment>
-        <div id="bg" ref={bgRef}/>
+        <div id="bg" ref={bgRef} style={{display:'none'}}/>
         <div className="app">
           <TopNav tab={tab} setTab={handleTabChange} sticky={true}/>
           <main className="inner-page">
@@ -601,6 +614,23 @@ function App() {
   /* ── Main home/tab view ──── */
   return (
     <React.Fragment>
+      {rdWarning && (
+        <div style={{
+          position:'fixed', top:0, left:0, right:0, zIndex:9999,
+          background: rdWarning === 'expired' ? '#c0392b' : '#e67e22',
+          color:'#fff', textAlign:'center', padding:'10px 16px',
+          fontSize:'14px', fontWeight:600, letterSpacing:'.02em',
+        }}>
+          {rdWarning === 'expired'
+            ? '⚠️ Real-Debrid subscription expired — streams unavailable. Renew at real-debrid.com'
+            : `⚠️ Real-Debrid expires in ${rdWarning} day${rdWarning === '1' ? '' : 's'} — renew at real-debrid.com`
+          }
+          <button onClick={() => setRdWarning(null)} style={{
+            marginLeft:16, background:'none', border:'1px solid rgba(255,255,255,.5)',
+            color:'#fff', borderRadius:4, padding:'2px 10px', cursor:'pointer', fontSize:12,
+          }}>Dismiss</button>
+        </div>
+      )}
       <div id="bg" ref={bgRef}/>
       <div className="app">
         <MobileTop tab={tab} setTab={handleTabChange}/>

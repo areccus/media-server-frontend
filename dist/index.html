@@ -3,23 +3,4531 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>Plex — Watch</title>
-
-<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
-<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
-  <link rel="stylesheet" crossorigin href="/assets/index-Dfcnxt4F.css">
+<title>HALO</title>
+<link rel="stylesheet" href="styles.css"/>
+<script crossorigin src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js"></script>
 </head>
 <body>
 <div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect, memo } = React;
 
-<script type="text/babel" src="tweaks-panel.jsx"></script>
-<script type="text/babel" src="data.jsx"></script>
-<script type="text/babel" src="router.jsx"></script>
-<script type="text/babel" src="detail-page.jsx"></script>
-<script type="text/babel" src="pages.jsx"></script>
-<script type="text/babel" src="components.jsx"></script>
-<script type="text/babel" src="app.jsx"></script>
+// tweaks-panel.jsx
+// Reusable Tweaks shell + form-control helpers.
+//
+// Owns the host protocol (listens for __activate_edit_mode / __deactivate_edit_mode,
+// posts __edit_mode_available / __edit_mode_set_keys / __edit_mode_dismissed) so
+// individual prototypes don't re-roll it. Ships a consistent set of controls so you
+// don't hand-draw <input type="range">, segmented radios, steppers, etc.
+//
+// Usage (in an HTML file that loads React + Babel):
+//
+//   const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+//     "primaryColor": "#D97757",
+//     "palette": ["#D97757", "#29261b", "#f6f4ef"],
+//     "fontSize": 16,
+//     "density": "regular",
+//     "dark": false
+//   }/*EDITMODE-END*/;
+//
+//   function App() {
+//     const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+//     return (
+//       <div style={{ fontSize: t.fontSize, color: t.primaryColor }}>
+//         Hello
+//         <TweaksPanel>
+//           <TweakSection label="Typography" />
+//           <TweakSlider label="Font size" value={t.fontSize} min={10} max={32} unit="px"
+//                        onChange={(v) => setTweak('fontSize', v)} />
+//           <TweakRadio  label="Density" value={t.density}
+//                        options={['compact', 'regular', 'comfy']}
+//                        onChange={(v) => setTweak('density', v)} />
+//           <TweakSection label="Theme" />
+//           <TweakColor  label="Primary" value={t.primaryColor}
+//                        options={['#D97757', '#2A6FDB', '#1F8A5B', '#7A5AE0']}
+//                        onChange={(v) => setTweak('primaryColor', v)} />
+//           <TweakColor  label="Palette" value={t.palette}
+//                        options={[['#D97757', '#29261b', '#f6f4ef'],
+//                                  ['#475569', '#0f172a', '#f1f5f9']]}
+//                        onChange={(v) => setTweak('palette', v)} />
+//           <TweakToggle label="Dark mode" value={t.dark}
+//                        onChange={(v) => setTweak('dark', v)} />
+//         </TweaksPanel>
+//       </div>
+//     );
+//   }
+//
+// ─────────────────────────────────────────────────────────────────────────────
+
+const __TWEAKS_STYLE = `
+  .twk-panel{position:fixed;right:16px;bottom:16px;z-index:2147483646;width:280px;
+    max-height:calc(100vh - 32px);display:flex;flex-direction:column;
+    transform:scale(var(--dc-inv-zoom,1));transform-origin:bottom right;
+    background:rgba(250,249,247,.78);color:#29261b;
+    -webkit-backdrop-filter:blur(24px) saturate(160%);backdrop-filter:blur(24px) saturate(160%);
+    border:.5px solid rgba(255,255,255,.6);border-radius:14px;
+    box-shadow:0 1px 0 rgba(255,255,255,.5) inset,0 12px 40px rgba(0,0,0,.18);
+    font:11.5px/1.4 ui-sans-serif,system-ui,-apple-system,sans-serif;overflow:hidden}
+  .twk-hd{display:flex;align-items:center;justify-content:space-between;
+    padding:10px 8px 10px 14px;cursor:move;user-select:none}
+  .twk-hd b{font-size:12px;font-weight:600;letter-spacing:.01em}
+  .twk-x{appearance:none;border:0;background:transparent;color:rgba(41,38,27,.55);
+    width:22px;height:22px;border-radius:6px;cursor:default;font-size:13px;line-height:1}
+  .twk-x:hover{background:rgba(0,0,0,.06);color:#29261b}
+  .twk-body{padding:2px 14px 14px;display:flex;flex-direction:column;gap:10px;
+    overflow-y:auto;overflow-x:hidden;min-height:0;
+    scrollbar-width:thin;scrollbar-color:rgba(0,0,0,.15) transparent}
+  .twk-body::-webkit-scrollbar{width:8px}
+  .twk-body::-webkit-scrollbar-track{background:transparent;margin:2px}
+  .twk-body::-webkit-scrollbar-thumb{background:rgba(0,0,0,.15);border-radius:4px;
+    border:2px solid transparent;background-clip:content-box}
+  .twk-body::-webkit-scrollbar-thumb:hover{background:rgba(0,0,0,.25);
+    border:2px solid transparent;background-clip:content-box}
+  .twk-row{display:flex;flex-direction:column;gap:5px}
+  .twk-row-h{flex-direction:row;align-items:center;justify-content:space-between;gap:10px}
+  .twk-lbl{display:flex;justify-content:space-between;align-items:baseline;
+    color:rgba(41,38,27,.72)}
+  .twk-lbl>span:first-child{font-weight:500}
+  .twk-val{color:rgba(41,38,27,.5);font-variant-numeric:tabular-nums}
+
+  .twk-sect{font-size:10px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+    color:rgba(41,38,27,.45);padding:10px 0 0}
+  .twk-sect:first-child{padding-top:0}
+
+  .twk-field{appearance:none;box-sizing:border-box;width:100%;min-width:0;height:26px;padding:0 8px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:7px;
+    background:rgba(255,255,255,.6);color:inherit;font:inherit;outline:none}
+  .twk-field:focus{border-color:rgba(0,0,0,.25);background:rgba(255,255,255,.85)}
+  select.twk-field{padding-right:22px;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='rgba(0,0,0,.5)' d='M0 0h10L5 6z'/></svg>");
+    background-repeat:no-repeat;background-position:right 8px center}
+
+  .twk-slider{appearance:none;-webkit-appearance:none;width:100%;height:4px;margin:6px 0;
+    border-radius:999px;background:rgba(0,0,0,.12);outline:none}
+  .twk-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;
+    width:14px;height:14px;border-radius:50%;background:#fff;
+    border:.5px solid rgba(0,0,0,.12);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:default}
+  .twk-slider::-moz-range-thumb{width:14px;height:14px;border-radius:50%;
+    background:#fff;border:.5px solid rgba(0,0,0,.12);box-shadow:0 1px 3px rgba(0,0,0,.2);cursor:default}
+
+  .twk-seg{position:relative;display:flex;padding:2px;border-radius:8px;
+    background:rgba(0,0,0,.06);user-select:none}
+  .twk-seg-thumb{position:absolute;top:2px;bottom:2px;border-radius:6px;
+    background:rgba(255,255,255,.9);box-shadow:0 1px 2px rgba(0,0,0,.12);
+    transition:left .15s cubic-bezier(.3,.7,.4,1),width .15s}
+  .twk-seg.dragging .twk-seg-thumb{transition:none}
+  .twk-seg button{appearance:none;position:relative;z-index:1;flex:1;border:0;
+    background:transparent;color:inherit;font:inherit;font-weight:500;min-height:22px;
+    border-radius:6px;cursor:default;padding:4px 6px;line-height:1.2;
+    overflow-wrap:anywhere}
+
+  .twk-toggle{position:relative;width:32px;height:18px;border:0;border-radius:999px;
+    background:rgba(0,0,0,.15);transition:background .15s;cursor:default;padding:0}
+  .twk-toggle[data-on="1"]{background:#34c759}
+  .twk-toggle i{position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:transform .15s}
+  .twk-toggle[data-on="1"] i{transform:translateX(14px)}
+
+  .twk-num{display:flex;align-items:center;box-sizing:border-box;min-width:0;height:26px;padding:0 0 0 8px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:7px;background:rgba(255,255,255,.6)}
+  .twk-num-lbl{font-weight:500;color:rgba(41,38,27,.6);cursor:ew-resize;
+    user-select:none;padding-right:8px}
+  .twk-num input{flex:1;min-width:0;height:100%;border:0;background:transparent;
+    font:inherit;font-variant-numeric:tabular-nums;text-align:right;padding:0 8px 0 0;
+    outline:none;color:inherit;-moz-appearance:textfield}
+  .twk-num input::-webkit-inner-spin-button,.twk-num input::-webkit-outer-spin-button{
+    -webkit-appearance:none;margin:0}
+  .twk-num-unit{padding-right:8px;color:rgba(41,38,27,.45)}
+
+  .twk-btn{appearance:none;height:26px;padding:0 12px;border:0;border-radius:7px;
+    background:rgba(0,0,0,.78);color:#fff;font:inherit;font-weight:500;cursor:default}
+  .twk-btn:hover{background:rgba(0,0,0,.88)}
+  .twk-btn.secondary{background:rgba(0,0,0,.06);color:inherit}
+  .twk-btn.secondary:hover{background:rgba(0,0,0,.1)}
+
+  .twk-swatch{appearance:none;-webkit-appearance:none;width:56px;height:22px;
+    border:.5px solid rgba(0,0,0,.1);border-radius:6px;padding:0;cursor:default;
+    background:transparent;flex-shrink:0}
+  .twk-swatch::-webkit-color-swatch-wrapper{padding:0}
+  .twk-swatch::-webkit-color-swatch{border:0;border-radius:5.5px}
+  .twk-swatch::-moz-color-swatch{border:0;border-radius:5.5px}
+
+  .twk-chips{display:flex;gap:6px}
+  .twk-chip{position:relative;appearance:none;flex:1;min-width:0;height:46px;
+    padding:0;border:0;border-radius:6px;overflow:hidden;cursor:default;
+    box-shadow:0 0 0 .5px rgba(0,0,0,.12),0 1px 2px rgba(0,0,0,.06);
+    transition:transform .12s cubic-bezier(.3,.7,.4,1),box-shadow .12s}
+  .twk-chip:hover{transform:translateY(-1px);
+    box-shadow:0 0 0 .5px rgba(0,0,0,.18),0 4px 10px rgba(0,0,0,.12)}
+  .twk-chip[data-on="1"]{box-shadow:0 0 0 1.5px rgba(0,0,0,.85),
+    0 2px 6px rgba(0,0,0,.15)}
+  .twk-chip>span{position:absolute;top:0;bottom:0;right:0;width:34%;
+    display:flex;flex-direction:column;box-shadow:-1px 0 0 rgba(0,0,0,.1)}
+  .twk-chip>span>i{flex:1;box-shadow:0 -1px 0 rgba(0,0,0,.1)}
+  .twk-chip>span>i:first-child{box-shadow:none}
+  .twk-chip svg{position:absolute;top:6px;left:6px;width:13px;height:13px;
+    filter:drop-shadow(0 1px 1px rgba(0,0,0,.3))}
+`;
+
+// ── useTweaks ───────────────────────────────────────────────────────────────
+// Single source of truth for tweak values. setTweak persists via the host
+// (__edit_mode_set_keys → host rewrites the EDITMODE block on disk).
+function useTweaks(defaults) {
+  const [values, setValues] = React.useState(defaults);
+  // Accepts either setTweak('key', value) or setTweak({ key: value, ... }) so a
+  // useState-style call doesn't write a "[object Object]" key into the persisted
+  // JSON block.
+  const setTweak = React.useCallback((keyOrEdits, val) => {
+    const edits = typeof keyOrEdits === 'object' && keyOrEdits !== null
+      ? keyOrEdits : { [keyOrEdits]: val };
+    setValues((prev) => ({ ...prev, ...edits }));
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits }, '*');
+    // Same-window signal so in-page listeners (deck-stage rail thumbnails)
+    // can react — the parent message only reaches the host, not peers.
+    window.dispatchEvent(new CustomEvent('tweakchange', { detail: edits }));
+  }, []);
+  return [values, setTweak];
+}
+
+// ── TweaksPanel ─────────────────────────────────────────────────────────────
+// Floating shell. Registers the protocol listener BEFORE announcing
+// availability — if the announce ran first, the host's activate could land
+// before our handler exists and the toolbar toggle would silently no-op.
+// The close button posts __edit_mode_dismissed so the host's toolbar toggle
+// flips off in lockstep; the host echoes __deactivate_edit_mode back which
+// is what actually hides the panel.
+function TweaksPanel({ title = 'Tweaks', children }) {
+  const [open, setOpen] = React.useState(false);
+  const dragRef = React.useRef(null);
+  const offsetRef = React.useRef({ x: 16, y: 16 });
+  const PAD = 16;
+
+  const clampToViewport = React.useCallback(() => {
+    const panel = dragRef.current;
+    if (!panel) return;
+    const w = panel.offsetWidth, h = panel.offsetHeight;
+    const maxRight = Math.max(PAD, window.innerWidth - w - PAD);
+    const maxBottom = Math.max(PAD, window.innerHeight - h - PAD);
+    offsetRef.current = {
+      x: Math.min(maxRight, Math.max(PAD, offsetRef.current.x)),
+      y: Math.min(maxBottom, Math.max(PAD, offsetRef.current.y)),
+    };
+    panel.style.right = offsetRef.current.x + 'px';
+    panel.style.bottom = offsetRef.current.y + 'px';
+  }, []);
+
+  React.useEffect(() => {
+    if (!open) return;
+    clampToViewport();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', clampToViewport);
+      return () => window.removeEventListener('resize', clampToViewport);
+    }
+    const ro = new ResizeObserver(clampToViewport);
+    ro.observe(document.documentElement);
+    return () => ro.disconnect();
+  }, [open, clampToViewport]);
+
+  React.useEffect(() => {
+    const onMsg = (e) => {
+      const t = e?.data?.type;
+      if (t === '__activate_edit_mode') setOpen(true);
+      else if (t === '__deactivate_edit_mode') setOpen(false);
+    };
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  const dismiss = () => {
+    setOpen(false);
+    window.parent.postMessage({ type: '__edit_mode_dismissed' }, '*');
+  };
+
+  const onDragStart = (e) => {
+    const panel = dragRef.current;
+    if (!panel) return;
+    const r = panel.getBoundingClientRect();
+    const sx = e.clientX, sy = e.clientY;
+    const startRight = window.innerWidth - r.right;
+    const startBottom = window.innerHeight - r.bottom;
+    const move = (ev) => {
+      offsetRef.current = {
+        x: startRight - (ev.clientX - sx),
+        y: startBottom - (ev.clientY - sy),
+      };
+      clampToViewport();
+    };
+    const up = () => {
+      window.removeEventListener('mousemove', move);
+      window.removeEventListener('mouseup', up);
+    };
+    window.addEventListener('mousemove', move);
+    window.addEventListener('mouseup', up);
+  };
+
+  if (!open) return null;
+  return (
+    <>
+      <style>{__TWEAKS_STYLE}</style>
+      <div ref={dragRef} className="twk-panel" data-omelette-chrome=""
+           style={{ right: offsetRef.current.x, bottom: offsetRef.current.y }}>
+        <div className="twk-hd" onMouseDown={onDragStart}>
+          <b>{title}</b>
+          <button className="twk-x" aria-label="Close tweaks"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onClick={dismiss}>✕</button>
+        </div>
+        <div className="twk-body">
+          {children}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── Layout helpers ──────────────────────────────────────────────────────────
+
+function TweakSection({ label, children }) {
+  return (
+    <>
+      <div className="twk-sect">{label}</div>
+      {children}
+    </>
+  );
+}
+
+function TweakRow({ label, value, children, inline = false }) {
+  return (
+    <div className={inline ? 'twk-row twk-row-h' : 'twk-row'}>
+      <div className="twk-lbl">
+        <span>{label}</span>
+        {value != null && <span className="twk-val">{value}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// ── Controls ────────────────────────────────────────────────────────────────
+
+function TweakSlider({ label, value, min = 0, max = 100, step = 1, unit = '', onChange }) {
+  return (
+    <TweakRow label={label} value={`${value}${unit}`}>
+      <input type="range" className="twk-slider" min={min} max={max} step={step}
+             value={value} onChange={(e) => onChange(Number(e.target.value))} />
+    </TweakRow>
+  );
+}
+
+function TweakToggle({ label, value, onChange }) {
+  return (
+    <div className="twk-row twk-row-h">
+      <div className="twk-lbl"><span>{label}</span></div>
+      <button type="button" className="twk-toggle" data-on={value ? '1' : '0'}
+              role="switch" aria-checked={!!value}
+              onClick={() => onChange(!value)}><i /></button>
+    </div>
+  );
+}
+
+function TweakRadio({ label, value, options, onChange }) {
+  const trackRef = React.useRef(null);
+  const [dragging, setDragging] = React.useState(false);
+  // The active value is read by pointer-move handlers attached for the lifetime
+  // of a drag — ref it so a stale closure doesn't fire onChange for every move.
+  const valueRef = React.useRef(value);
+  valueRef.current = value;
+
+  // Segments wrap mid-word once per-segment width runs out. The track is
+  // ~248px (280 panel − 28 body pad − 4 seg pad), each button loses 12px
+  // to its own padding, and 11.5px system-ui averages ~6.3px/char — so 2
+  // options fit ~16 chars each, 3 fit ~10. Past that (or >3 options), fall
+  // back to a dropdown rather than wrap.
+  const labelLen = (o) => String(typeof o === 'object' ? o.label : o).length;
+  const maxLen = options.reduce((m, o) => Math.max(m, labelLen(o)), 0);
+  const fitsAsSegments = maxLen <= ({ 2: 16, 3: 10 }[options.length] ?? 0);
+  if (!fitsAsSegments) {
+    // <select> emits strings — map back to the original option value so the
+    // fallback stays type-preserving (numbers, booleans) like the segment path.
+    const resolve = (s) => {
+      const m = options.find((o) => String(typeof o === 'object' ? o.value : o) === s);
+      return m === undefined ? s : typeof m === 'object' ? m.value : m;
+    };
+    return <TweakSelect label={label} value={value} options={options}
+                        onChange={(s) => onChange(resolve(s))} />;
+  }
+  const opts = options.map((o) => (typeof o === 'object' ? o : { value: o, label: o }));
+  const idx = Math.max(0, opts.findIndex((o) => o.value === value));
+  const n = opts.length;
+
+  const segAt = (clientX) => {
+    const r = trackRef.current.getBoundingClientRect();
+    const inner = r.width - 4;
+    const i = Math.floor(((clientX - r.left - 2) / inner) * n);
+    return opts[Math.max(0, Math.min(n - 1, i))].value;
+  };
+
+  const onPointerDown = (e) => {
+    setDragging(true);
+    const v0 = segAt(e.clientX);
+    if (v0 !== valueRef.current) onChange(v0);
+    const move = (ev) => {
+      if (!trackRef.current) return;
+      const v = segAt(ev.clientX);
+      if (v !== valueRef.current) onChange(v);
+    };
+    const up = () => {
+      setDragging(false);
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
+  return (
+    <TweakRow label={label}>
+      <div ref={trackRef} role="radiogroup" onPointerDown={onPointerDown}
+           className={dragging ? 'twk-seg dragging' : 'twk-seg'}>
+        <div className="twk-seg-thumb"
+             style={{ left: `calc(2px + ${idx} * (100% - 4px) / ${n})`,
+                      width: `calc((100% - 4px) / ${n})` }} />
+        {opts.map((o) => (
+          <button key={o.value} type="button" role="radio" aria-checked={o.value === value}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </TweakRow>
+  );
+}
+
+function TweakSelect({ label, value, options, onChange }) {
+  return (
+    <TweakRow label={label}>
+      <select className="twk-field" value={value} onChange={(e) => onChange(e.target.value)}>
+        {options.map((o) => {
+          const v = typeof o === 'object' ? o.value : o;
+          const l = typeof o === 'object' ? o.label : o;
+          return <option key={v} value={v}>{l}</option>;
+        })}
+      </select>
+    </TweakRow>
+  );
+}
+
+function TweakText({ label, value, placeholder, onChange }) {
+  return (
+    <TweakRow label={label}>
+      <input className="twk-field" type="text" value={value} placeholder={placeholder}
+             onChange={(e) => onChange(e.target.value)} />
+    </TweakRow>
+  );
+}
+
+function TweakNumber({ label, value, min, max, step = 1, unit = '', onChange }) {
+  const clamp = (n) => {
+    if (min != null && n < min) return min;
+    if (max != null && n > max) return max;
+    return n;
+  };
+  const startRef = React.useRef({ x: 0, val: 0 });
+  const onScrubStart = (e) => {
+    e.preventDefault();
+    startRef.current = { x: e.clientX, val: value };
+    const decimals = (String(step).split('.')[1] || '').length;
+    const move = (ev) => {
+      const dx = ev.clientX - startRef.current.x;
+      const raw = startRef.current.val + dx * step;
+      const snapped = Math.round(raw / step) * step;
+      onChange(clamp(Number(snapped.toFixed(decimals))));
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+  return (
+    <div className="twk-num">
+      <span className="twk-num-lbl" onPointerDown={onScrubStart}>{label}</span>
+      <input type="number" value={value} min={min} max={max} step={step}
+             onChange={(e) => onChange(clamp(Number(e.target.value)))} />
+      {unit && <span className="twk-num-unit">{unit}</span>}
+    </div>
+  );
+}
+
+// Relative-luminance contrast pick — checkmarks drawn over a swatch need to
+// read on both #111 and #fafafa without per-option configuration. Hex input
+// only (#rgb / #rrggbb); named or rgb()/hsl() colors fall through to "light".
+function __twkIsLight(hex) {
+  const h = String(hex).replace('#', '');
+  const x = h.length === 3 ? h.replace(/./g, (c) => c + c) : h.padEnd(6, '0');
+  const n = parseInt(x.slice(0, 6), 16);
+  if (Number.isNaN(n)) return true;
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return r * 299 + g * 587 + b * 114 > 148000;
+}
+
+const __TwkCheck = ({ light }) => (
+  <svg viewBox="0 0 14 14" aria-hidden="true">
+    <path d="M3 7.2 5.8 10 11 4.2" fill="none" strokeWidth="2.2"
+          strokeLinecap="round" strokeLinejoin="round"
+          stroke={light ? 'rgba(0,0,0,.78)' : '#fff'} />
+  </svg>
+);
+
+// TweakColor — curated color/palette picker. Each option is either a single
+// hex string or an array of 1-5 hex strings; the card adapts — a lone color
+// renders solid, a palette renders colors[0] as the hero (left ~2/3) with the
+// rest stacked in a sharp column on the right. onChange emits the
+// option in the shape it was passed (string stays string, array stays array).
+// Without options it falls back to the native color input for back-compat.
+function TweakColor({ label, value, options, onChange }) {
+  if (!options || !options.length) {
+    return (
+      <div className="twk-row twk-row-h">
+        <div className="twk-lbl"><span>{label}</span></div>
+        <input type="color" className="twk-swatch" value={value}
+               onChange={(e) => onChange(e.target.value)} />
+      </div>
+    );
+  }
+  // Native <input type=color> emits lowercase hex per the HTML spec, so
+  // compare case-insensitively. String() guards JSON.stringify(undefined),
+  // which returns the primitive undefined (no .toLowerCase).
+  const key = (o) => String(JSON.stringify(o)).toLowerCase();
+  const cur = key(value);
+  return (
+    <TweakRow label={label}>
+      <div className="twk-chips" role="radiogroup">
+        {options.map((o, i) => {
+          const colors = Array.isArray(o) ? o : [o];
+          const [hero, ...rest] = colors;
+          const sup = rest.slice(0, 4);
+          const on = key(o) === cur;
+          return (
+            <button key={i} type="button" className="twk-chip" role="radio"
+                    aria-checked={on} data-on={on ? '1' : '0'}
+                    aria-label={colors.join(', ')} title={colors.join(' · ')}
+                    style={{ background: hero }}
+                    onClick={() => onChange(o)}>
+              {sup.length > 0 && (
+                <span>
+                  {sup.map((c, j) => <i key={j} style={{ background: c }} />)}
+                </span>
+              )}
+              {on && <__TwkCheck light={__twkIsLight(hero)} />}
+            </button>
+          );
+        })}
+      </div>
+    </TweakRow>
+  );
+}
+
+function TweakButton({ label, onClick, secondary = false }) {
+  return (
+    <button type="button" className={secondary ? 'twk-btn secondary' : 'twk-btn'}
+            onClick={onClick}>{label}</button>
+  );
+}
+
+Object.assign(window, {
+  useTweaks, TweaksPanel, TweakSection, TweakRow,
+  TweakSlider, TweakToggle, TweakRadio, TweakSelect,
+  TweakText, TweakNumber, TweakColor, TweakButton,
+});
+/*
+╔══════════════════════════════════════════════════════════════════════════════╗
+║                         FRONTEND DATA LAYER                                  ║
+║                    API Integration & Client Caching                          ║
+╚══════════════════════════════════════════════════════════════════════════════╝
+
+📚 PURPOSE:
+This file is the BRIDGE between the frontend (what you see) and the backend (the API).
+It handles:
+  1. Finding the backend server (port detection)
+  2. Fetching data from backend API endpoints
+  3. Caching responses in browser memory (8-hour TTL)
+  4. Providing fallback data if backend is unavailable
+  5. Making data available to React components
+
+Think of this as the "Data Manager" for the frontend!
+
+🔄 DATA FLOW:
+  React Component → data.jsx → Backend API → TMDB → Backend → data.jsx → React Component
+       ↑                                                                        ↓
+       └────────────────────────────────────────────────────────────────────────┘
+                              (data flows in a circle)
+
+💾 WHY CLIENT-SIDE CACHING?
+Even though the backend caches TMDB responses for 8 hours, we ALSO cache on the
+client side because:
+  1. Faster: No network request needed if data is already in memory
+  2. Offline support: Can show cached data even if backend is down
+  3. Reduced backend load: Fewer requests = faster backend
+  4. Better UX: Instant page loads when navigating back to previous pages
+
+⚡ KEY FEATURES:
+  - Automatic port detection (tries 5001, then 5000)
+  - Tailscale support (uses window.location.hostname instead of hardcoded localhost)
+  - 8-hour cache matching backend TTL
+  - Fallback data when backend unavailable
+  - Global state management (ITEMS, HERO_LIST, ROWS)
+
+🌐 TAILSCALE SUPPORT:
+Instead of hardcoding "localhost", we use window.location.hostname which means:
+  - On computer: http://localhost:8080 → Backend at localhost:5001
+  - On phone: http://192.168.1.5:8080 → Backend at 192.168.1.5:5001
+  - With Tailscale: http://mac-mini.tailscale.net:8080 → Backend at mac-mini.tailscale.net:5001
+
+This makes remote access work automatically!
+
+📦 WHAT THIS FILE EXPORTS:
+Global variables (available everywhere):
+  - ITEMS: Object mapping item IDs to item data (e.g., ITEMS['movie_550'] = Fight Club data)
+  - HERO_LIST: Array of item IDs for hero carousel (e.g., ['movie_550', 'tv_1234'])
+  - ROWS: Array of row objects for homepage (trending, recommended, etc.)
+  - posterUrl(): Get poster image URL for an item
+  - backdropUrl(): Get backdrop image URL for an item
+  - landscapeUrl(): Get landscape image URL for an item
+  - initializeData(): Load all data from backend
+  - fetchWithCache(): Make cached API requests
+  - API_BASE_URL: Current backend URL
+
+🔧 HOW TO USE:
+In React components:
+  await window.initializeData();  // Load all data
+  const item = window.ITEMS['movie_550'];  // Get Fight Club
+  const posterUrl = window.posterUrl(item);  // Get poster URL
+*/
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BACKEND CONNECTION CONFIGURATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+// List of ports to try for backend (macOS AirPlay often uses 5000)
+const BACKEND_PORTS = [5001, 5000];
+
+// Get current host dynamically (supports localhost and Tailscale)
+// window.location.hostname returns:
+//   - "localhost" when running locally
+//   - "192.168.1.5" when accessing from phone on same network
+//   - "mac-mini.tailscale.net" when accessing via Tailscale VPN
+const CURRENT_HOST = window.location.hostname;
+
+// On HTTPS (Vercel/production) use same-origin immediately so no calls race
+// with detectBackendPort() and trigger mixed-content errors.
+let API_BASE_URL = window.location.protocol === 'https:'
+  ? `${window.location.origin}/api`
+  : `http://${CURRENT_HOST}:5000/api`;
+
+// ngrok free tier shows a browser interstitial for any request with a browser
+// User-Agent unless this header is present. Patch fetch globally so every API
+// call bypasses it without having to touch each call site individually.
+if (window.location.protocol === 'https:') {
+  const _origFetch = window.fetch.bind(window);
+  window.fetch = (input, init = {}) => {
+    const url = typeof input === 'string' ? input : (input?.url ?? '');
+    if (url.includes('/api/') || url.startsWith(API_BASE_URL)) {
+      init = { ...init, headers: { 'ngrok-skip-browser-warning': '1', 'Cache-Control': 'no-cache', ...(init.headers || {}) } };
+    }
+    return _origFetch(input, init);
+  };
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BACKEND PORT DETECTION
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * DETECT WHICH PORT THE BACKEND IS RUNNING ON
+ *
+ * What it does: Tries to connect to backend on different ports until one works.
+ * This is needed because:
+ *   - Port 5000 is often taken by macOS AirPlay
+ *   - We want to automatically find the right port
+ *
+ * How it works:
+ *   1. Loop through BACKEND_PORTS array [5001, 5000]
+ *   2. Try to fetch /api/health endpoint on each port
+ *   3. If response is OK, we found the backend!
+ *   4. Update API_BASE_URL to use correct port
+ *
+ * Returns:
+ *   - true if backend found
+ *   - false if no backend available on any port
+ *
+ * Timeout: 1 second per port (don't wait too long)
+ */
+async function detectBackendPort() {
+  // When served over HTTPS (Cloudflare tunnel or production), nginx proxies
+  // /api/ on the same origin — no port scanning needed
+  if (window.location.protocol === 'https:') {
+    API_BASE_URL = `${window.location.origin}/api`;
+    console.log(`✅ HTTPS detected — using same-origin API: ${API_BASE_URL}`);
+    return true;
+  }
+
+  // Local dev: scan ports to find Flask
+  for (const port of BACKEND_PORTS) {
+    try {
+      const response = await fetch(`http://${CURRENT_HOST}:${port}/api/health`, {
+        method: 'GET',
+        signal: AbortSignal.timeout(1000)
+      });
+      if (response.ok) {
+        API_BASE_URL = `http://${CURRENT_HOST}:${port}/api`;
+        console.log(`✅ Connected to backend on ${CURRENT_HOST}:${port}`);
+        return true;
+      }
+    } catch (error) {
+      continue;
+    }
+  }
+
+  console.warn('⚠️ Could not connect to backend. Using fallback data.');
+  return false;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CLIENT-SIDE CACHE
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * CLIENT-SIDE CACHE OBJECT
+ *
+ * What it stores: API responses in browser memory (RAM, not disk)
+ * How it works: Similar to backend cache but lives in the browser
+ *
+ * Structure:
+ *   apiCache = {
+ *     data: {
+ *       "/hero": [hero items array],
+ *       "/trending?type=all": [trending items array],
+ *       ...
+ *     },
+ *     timestamps: {
+ *       "/hero": 1234567890123,  (milliseconds since 1970)
+ *       "/trending?type=all": 1234567890456,
+ *       ...
+ *     },
+ *     CACHE_DURATION: 28800000  (8 hours in milliseconds)
+ *   }
+ *
+ * Why 8 hours? Matches backend cache TTL so we don't serve stale data
+ *
+ * Cache lifecycle:
+ *   1. First request: Fetch from backend, save to cache
+ *   2. Second request: Return from cache (instant!)
+ *   3. After 8 hours: Cache expires, fetch from backend again
+ */
+const apiCache = {
+  data: {},
+  timestamps: {},
+  CACHE_DURATION: 30 * 60 * 1000,
+  DISK_DURATION:  2 * 60 * 60 * 1000,
+};
+
+const LS_PREFIX = 'halo_cache_';
+const LS_VERSION = 'halo_cache_version';
+const CACHE_VER = '4';
+// Wipe all stale localStorage entries whenever the cache version bumps
+try {
+  if (localStorage.getItem(LS_VERSION) !== CACHE_VER) {
+    Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX)).forEach(k => localStorage.removeItem(k));
+    localStorage.setItem(LS_VERSION, CACHE_VER);
+  }
+} catch {}
+
+// localStorage helpers — silent on quota errors
+function lsGet(endpoint) {
+  try {
+    const raw = localStorage.getItem(LS_PREFIX + endpoint);
+    if (!raw) return null;
+    const { ts, data } = JSON.parse(raw);
+    if (Date.now() - ts > apiCache.DISK_DURATION) { localStorage.removeItem(LS_PREFIX + endpoint); return null; }
+    return { ts, data };
+  } catch { return null; }
+}
+function lsSet(endpoint, data) {
+  try { localStorage.setItem(LS_PREFIX + endpoint, JSON.stringify({ ts: Date.now(), data })); } catch {}
+}
+function clearCacheEntry(endpoint) {
+  delete apiCache.data[endpoint];
+  delete apiCache.timestamps[endpoint];
+  try { localStorage.removeItem(LS_PREFIX + endpoint); } catch {}
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// API REQUEST WITH CACHING
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * FETCH DATA FROM BACKEND WITH CACHING
+ *
+ * This is the main function for getting data from the backend. It automatically
+ * handles caching so you don't have to think about it!
+ *
+ * How it works:
+ *   1. Check if we have cached data for this endpoint
+ *   2. If yes AND not expired: Return cached data (instant!)
+ *   3. If no OR expired: Fetch from backend, cache it, return it
+ *   4. If backend error: Return fallback data
+ *
+ * Parameters:
+ *   - endpoint: API path like "/hero" or "/trending?type=all"
+ *
+ * Returns:
+ *   - Array or object with data from backend
+ *   - Fallback data if backend unavailable
+ *
+ * Cache check logic:
+ *   - Have cached data? ✓
+ *   - Have timestamp? ✓
+ *   - Less than 8 hours old? (now - timestamp) < CACHE_DURATION
+ *     If all three are true → Use cache!
+ *
+ * Example:
+ *   const heroItems = await fetchWithCache('/hero');
+ *   // First call: Fetches from backend (slow)
+ *   // Second call: Returns from cache (instant!)
+ */
+// noBackground: skip the background revalidate (use for detail pages — metadata rarely changes)
+async function fetchWithCache(endpoint, { noBackground = false } = {}) {
+  const now = Date.now();
+
+  // 1. In-memory hit (fastest — same session navigation)
+  if (apiCache.data[endpoint] && apiCache.timestamps[endpoint] &&
+      (now - apiCache.timestamps[endpoint]) < apiCache.CACHE_DURATION) {
+    return apiCache.data[endpoint];
+  }
+
+  // 2. localStorage hit
+  const disk = lsGet(endpoint);
+  if (disk) {
+    apiCache.data[endpoint] = disk.data;
+    apiCache.timestamps[endpoint] = disk.ts;
+    if (!noBackground) fetchFresh(endpoint);
+    return disk.data;
+  }
+
+  // 3. Cold fetch — nothing cached anywhere
+  return fetchFresh(endpoint);
+}
+
+async function fetchFresh(endpoint) {
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const result = await response.json();
+    if (!result.success) throw new Error(result.error || 'API error');
+
+    const now = Date.now();
+    apiCache.data[endpoint] = result.data;
+    apiCache.timestamps[endpoint] = now;
+    lsSet(endpoint, result.data);
+
+    return result.data;
+  } catch (error) {
+    console.error(`Failed to fetch ${endpoint}:`, error);
+    // Return in-memory stale data if we have it, otherwise fallback
+    return apiCache.data[endpoint] || getFallbackData(endpoint);
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FALLBACK DATA (when backend unavailable)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET FALLBACK DATA WHEN BACKEND IS UNAVAILABLE
+ *
+ * What it does: Returns placeholder data when backend can't be reached.
+ * This prevents the app from crashing and shows a helpful message.
+ *
+ * Why: Better to show placeholder content than a blank screen or error!
+ *
+ * Parameters:
+ *   - endpoint: The API endpoint that failed (e.g., "/hero")
+ *
+ * Returns:
+ *   - Array of placeholder items with instructions to configure API key
+ *
+ * What fallback items look like:
+ *   {
+ *     id: 'fallback_1',
+ *     title: 'Media Server',
+ *     synopsis: 'Configure your TMDB API key...',
+ *     poster: 'https://picsum.photos/seed/placeholder/500/750',  (random image)
+ *     tone: '#5BB7FF',  (nice blue color)
+ *     ...
+ *   }
+ */
+function getFallbackData(endpoint) {
+  // Base fallback item with helpful message
+  const fallbackItem = {
+    id: 'fallback_1',
+    title: 'Media Server',
+    year: '2024',
+    rating: 'TV-MA',
+    runtime: '2h 00m',
+    genre: 'Drama',
+    meta: 'Movie · 2024',
+    tone: '#5BB7FF',  // Nice blue color
+    synopsis: 'Configure your TMDB API key in the backend .env file to load real content.',
+    poster: 'https://picsum.photos/seed/placeholder/500/750',      // Random placeholder
+    backdrop: 'https://picsum.photos/seed/placeholder-bd/1920/1080'  // Random backdrop
+  };
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Special handling for hero endpoint (needs 5 items with different colors)
+  // ───────────────────────────────────────────────────────────────────────
+
+  if (endpoint.includes('hero')) {
+    // Create 5 hero items with different colors and titles
+    const heroColors = ['#7C5CFF', '#E8623A', '#2BA6E0', '#E2B23A', '#F08CBF'];
+
+    return Array(5).fill(null).map((_, i) => ({
+      ...fallbackItem,              // Copy all base properties
+      id: `hero_${i}`,              // Unique ID for each hero item
+      title: `Featured ${i + 1}`,   // "Featured 1", "Featured 2", etc.
+      tone: heroColors[i]           // Different color for each
+    }));
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Default: Return 8 placeholder items
+  // ───────────────────────────────────────────────────────────────────────
+
+  return Array(8).fill(null).map((_, i) => ({
+    ...fallbackItem,
+    id: `item_${i}`,
+    title: `Item ${i + 1}`
+  }));
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// GLOBAL STATE VARIABLES
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GLOBAL DATA STORAGE
+ *
+ * These variables store ALL media data for the app. They're accessible from
+ * any React component via window.ITEMS, window.HERO_LIST, etc.
+ *
+ * Why global? React components need to share the same data. Instead of passing
+ * props down through many components, we use global state.
+ *
+ * ITEMS: Object mapping item IDs to full item data
+ *   Example: {
+ *     'movie_550': { title: 'Fight Club', year: '1999', ... },
+ *     'movie_24': { title: 'Kill Bill', year: '2003', ... },
+ *     'tv_1234': { title: 'Breaking Bad', year: '2008', ... }
+ *   }
+ *
+ * HERO_LIST: Array of item IDs for hero carousel
+ *   Example: ['movie_550', 'movie_24', 'tv_1234', 'movie_789', 'movie_999']
+ *
+ * ROWS: Array of row objects for homepage
+ *   Example: [
+ *     { id: 'tr', label: 'Trending Now', items: ['movie_1', 'movie_2', ...] },
+ *     { id: 'rec', label: 'Recommended', items: ['movie_3', 'movie_4', ...] }
+ *   ]
+ */
+
+// Object to store all media items (movies, TV shows, anime)
+// Key = item ID (e.g., "movie_550")
+// Value = item data (title, poster, year, etc.)
+let ITEMS = {};
+
+// Array of item IDs for hero carousel (the big banner at top)
+// Example: ['movie_550', 'tv_1234', 'movie_789']
+let HERO_LIST = [];
+
+// Array of row objects for homepage (each row has label and items)
+// Example: [{ id: 'trending', label: 'Trending Now', items: [...] }]
+let ROWS = [];
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DATA INITIALIZATION
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * INITIALIZE ALL DATA FROM BACKEND
+ *
+ * This is the MAIN function that loads all data for the app. Called once when
+ * app starts up.
+ *
+ * What it does:
+ *   1. Detect which port backend is running on (5001 or 5000)
+ *   2. Fetch ALL data in parallel (faster!)
+ *      - Hero items (5 featured items)
+ *      - Trending (10 items)
+ *      - Recommended (10 items)
+ *      - Popular movies (10 items)
+ *      - Popular TV shows (10 items)
+ *      - Anime (10 items)
+ *   3. Combine all items into ITEMS object
+ *   4. Set up HERO_LIST array
+ *   5. Set up ROWS array
+ *
+ * Why parallel? Using Promise.all() fetches everything at once instead of
+ * one-by-one. Much faster!
+ *   Sequential: 6 requests × 100ms = 600ms total
+ *   Parallel: 6 requests at once = 100ms total (6x faster!)
+ *
+ * Lazy loading: Images load as you scroll, not all at once. This saves
+ * bandwidth and makes initial load much faster.
+ *
+ * Error handling: If backend fails, uses fallback data so app still works
+ */
+async function initializeData() {
+  try {
+    // ───────────────────────────────────────────────────────────────────────
+    // STEP 1: Find backend server (port detection)
+    // ───────────────────────────────────────────────────────────────────────
+
+    await detectBackendPort();
+    window.API_BASE_URL = API_BASE_URL;
+
+    // ───────────────────────────────────────────────────────────────────────
+    // STEP 2: Fetch all data in parallel (Promise.all = runs at same time)
+    // ───────────────────────────────────────────────────────────────────────
+
+    // Promise.all runs all fetches simultaneously
+    // [a, b, c] = await Promise.all([fetch1, fetch2, fetch3])
+    // This is MUCH faster than:
+    //   const a = await fetch1;
+    //   const b = await fetch2;  (waits for a)
+    //   const c = await fetch3;  (waits for b)
+    const [heroItems, trending, recommended, movies, tvShows, anime, upcoming] = await Promise.all([
+      fetchWithCache('/hero'),                  // 5 featured items
+      fetchWithCache('/trending?type=all'),     // 10 trending items
+      fetchWithCache('/recommended'),           // 10 recommended movies
+      fetchWithCache('/movies'),                // 10 popular movies
+      fetchWithCache('/tv'),                    // 10 popular TV shows
+      fetchWithCache('/anime'),                 // 10 anime shows
+      fetchWithCache('/movies/upcoming').catch(() => []),  // coming soon
+    ]);
+
+    // ───────────────────────────────────────────────────────────────────────
+    // STEP 3: Combine all items into ITEMS object
+    // ───────────────────────────────────────────────────────────────────────
+
+    // Combine all arrays into one big array
+    // [...a, ...b] = spread operator, combines arrays
+    const allItems = [
+      ...heroItems,
+      ...trending,
+      ...recommended,
+      ...movies,
+      ...tvShows,
+      ...anime,
+      ...(upcoming || []),
+    ];
+
+    // Convert array to object for fast lookups
+    // Array: [item1, item2, item3] → O(n) lookup (slow)
+    // Object: { id1: item1, id2: item2 } → O(1) lookup (instant!)
+    allItems.forEach(item => {
+      ITEMS[item.id] = item;  // Store each item by its ID
+    });
+
+    // ───────────────────────────────────────────────────────────────────────
+    // STEP 4: Set up HERO_LIST (hero carousel items)
+    // ───────────────────────────────────────────────────────────────────────
+
+    // Clear existing array (important for hot-reloading)
+    HERO_LIST.length = 0;
+
+    // Add first 5 hero item IDs
+    // .map(item => item.id) converts [{id: 'movie_1', ...}, ...] → ['movie_1', ...]
+    HERO_LIST.push(...heroItems.slice(0, 5).map(item => item.id));
+
+    // Why push instead of reassign?
+    // push modifies existing array (maintains references)
+    // reassign creates new array (breaks references in React components)
+
+    // ───────────────────────────────────────────────────────────────────────
+    // STEP 5: Set up ROWS (homepage content rows)
+    // ───────────────────────────────────────────────────────────────────────
+
+    // Clear existing array
+    ROWS.length = 0;
+
+    // Add all content rows
+    ROWS.push(
+      {
+        id: 'tr',
+        label: 'Trending Now',
+        items: trending.map(item => item.id)
+      },
+      {
+        id: 'top10',
+        label: 'Top 10 in the US Today',
+        items: trending.slice(0, 10).map(item => item.id)
+      },
+      {
+        id: 'rec',
+        label: 'Recommended For You',
+        items: recommended.map(item => item.id)
+      },
+      {
+        id: 'mv',
+        label: 'Popular Movies',
+        items: movies.map(item => item.id)
+      },
+      {
+        id: 'tv',
+        label: 'TV Shows',
+        items: tvShows.map(item => item.id)
+      },
+      {
+        id: 'an',
+        label: 'Anime',
+        items: anime.map(item => item.id)
+      }
+    );
+    if ((upcoming || []).length > 0) {
+      ROWS.push({
+        id: 'coming',
+        label: 'Coming Soon',
+        items: upcoming.map(item => item.id)
+      });
+    }
+
+    // Pre-load completed local cache entries for download badges (best-effort)
+    fetch(`${API_BASE_URL}/video-cache/list`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          window.cachedSet = new Set(
+            (d.data || []).map(e => `${e.media_type}_${e.media_id}`)
+          );
+          // Notify cards to re-render now that cachedSet is ready
+          window.dispatchEvent(new CustomEvent('cachedset-ready'));
+        }
+      })
+      .catch(() => {});
+
+    // ───────────────────────────────────────────────────────────────────────
+    // STEP 6: Log success message
+    // ───────────────────────────────────────────────────────────────────────
+
+    console.log('Data loaded successfully:', {
+      totalItems: Object.keys(ITEMS).length,  // How many unique items?
+      heroItems: HERO_LIST.length,             // Should be 5
+      rows: ROWS.length                        // Should be 5
+    });
+
+  } catch (error) {
+    // ───────────────────────────────────────────────────────────────────────
+    // ERROR HANDLING: Backend unavailable - use fallback data
+    // ───────────────────────────────────────────────────────────────────────
+
+    console.error('Failed to initialize data:', error);
+
+    // Get fallback data
+    const fallbackHero = getFallbackData('/hero');
+    const fallbackItems = getFallbackData('/trending');
+
+    // Populate ITEMS with fallback data
+    fallbackHero.forEach(item => ITEMS[item.id] = item);
+    fallbackItems.forEach(item => ITEMS[item.id] = item);
+
+    // Set up HERO_LIST with fallback data
+    HERO_LIST.length = 0;
+    HERO_LIST.push(...fallbackHero.map(item => item.id));
+
+    // Set up ROWS with fallback data
+    ROWS.length = 0;
+    ROWS.push({
+      id: 'fallback',
+      label: 'Content (API Not Connected)',
+      items: fallbackItems.map(item => item.id)
+    });
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// IMAGE URL HELPERS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET POSTER IMAGE URL
+ *
+ * What it does: Returns full URL to poster image for a media item
+ *
+ * Poster = vertical movie poster (like in movie theaters)
+ * Typical size: 500×750 pixels (2:3 aspect ratio)
+ *
+ * Parameters:
+ *   - item: Media item object
+ *   - w: Width in pixels (default 600)
+ *   - h: Height in pixels (default 900)
+ *
+ * Returns: Full URL to poster image
+ *
+ * Example:
+ *   const item = ITEMS['movie_550'];
+ *   const url = posterUrl(item);
+ *   // Returns: "https://image.tmdb.org/t/p/w500/abc123.jpg"
+ *
+ * Note: Item already has poster URL from backend, we just return it!
+ */
+function posterUrl(item, w = 600, h = 900) {
+  if (item && item.poster) {
+    return item.poster;  // Backend already provided full URL
+  }
+
+  // No poster available - return placeholder
+  // picsum.photos provides random placeholder images
+  // seed ensures same ID always gets same placeholder
+  return `https://picsum.photos/seed/${item?.id || 'default'}/${w}/${h}`;
+}
+
+/**
+ * GET BACKDROP IMAGE URL
+ *
+ * What it does: Returns full URL to backdrop image for a media item
+ *
+ * Backdrop = wide horizontal image (used for hero banner)
+ * Typical size: 2400×1200 pixels (16:9 aspect ratio)
+ *
+ * Similar to posterUrl but for wide images
+ */
+function backdropUrl(item, w = 2400, h = 1200) {
+  if (item && item.backdrop) {
+    return item.backdrop;  // Backend already provided full URL
+  }
+
+  // No backdrop - return placeholder with different seed
+  return `https://picsum.photos/seed/${item?.id || 'default'}-bd/${w}/${h}`;
+}
+
+/**
+ * GET LANDSCAPE IMAGE URL
+ *
+ * What it does: Returns landscape-oriented image (wider than tall)
+ *
+ * Landscape = horizontal image for cards and grids
+ * Typical size: 800×450 pixels (16:9 aspect ratio)
+ *
+ * Fallback order:
+ *   1. Use poster if available
+ *   2. Use backdrop if available
+ *   3. Use placeholder
+ */
+function landscapeUrl(item, w = 800, h = 450) {
+  if (item && item.poster) {
+    return item.poster;  // Use poster as landscape
+  }
+  if (item && item.backdrop) {
+    return item.backdrop;  // Or use backdrop
+  }
+
+  // No images - return placeholder
+  return `https://picsum.photos/seed/${item?.id || 'default'}-ls/${w}/${h}`;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// EXPORT TO GLOBAL SCOPE
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * MAKE EVERYTHING AVAILABLE GLOBALLY
+ *
+ * Why: React components need access to this data. We attach everything to
+ * the window object so any component can access it.
+ *
+ * Alternative: Could use React Context or Redux, but this is simpler for
+ * a small app and works great!
+ *
+ * Usage in React components:
+ *   const item = window.ITEMS['movie_550'];
+ *   const posterUrl = window.posterUrl(item);
+ *   await window.initializeData();
+ *
+ * Object.assign(target, source) copies all properties from source to target
+ *
+ * After this runs, you can access:
+ *   window.ITEMS
+ *   window.HERO_LIST
+ *   window.ROWS
+ *   window.posterUrl
+ *   window.backdropUrl
+ *   window.landscapeUrl
+ *   window.initializeData
+ *   window.fetchWithCache
+ *   window.API_BASE_URL
+ */
+Object.assign(window, {
+  ITEMS,              // Global items object
+  HERO_LIST,          // Global hero list array
+  ROWS,               // Global rows array
+  posterUrl,          // Poster URL function
+  backdropUrl,        // Backdrop URL function
+  landscapeUrl,       // Landscape URL function
+  initializeData,     // Data loading function
+  fetchWithCache,     // Cached fetch function
+  clearCacheEntry,    // Invalidate a single cache entry
+  API_BASE_URL        // Current backend URL
+});
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TROUBLESHOOTING GUIDE
+// ═══════════════════════════════════════════════════════════════════════════
+
+/*
+COMMON ISSUES AND SOLUTIONS:
+
+1. "Could not connect to backend" warning
+   Problem: Backend not running or wrong port
+   Solution:
+     - Check backend is running: ./start.sh
+     - Check console logs for port number
+     - Try http://localhost:5001/api/health in browser
+     - Check firewall settings if accessing from another device
+
+2. Fallback data showing ("Media Server" placeholders)
+   Problem: Backend not responding or TMDB API key not set
+   Solution:
+     - Check backend logs for errors
+     - Verify TMDB_API_KEY in backend/.env
+     - Test backend endpoints: curl http://localhost:5001/api/hero
+     - Check network tab in browser DevTools
+
+3. Cache not working (always fetching from backend)
+   Problem: Cache may be disabled or corrupted
+   Solution:
+     - Open browser console and check for cache HIT/MISS messages
+     - Clear browser cache: Ctrl+Shift+Delete (or Cmd+Shift+Delete on Mac)
+     - Check apiCache object in console: console.log(apiCache)
+
+4. Images not loading
+   Problem: TMDB image URLs may be blocked or invalid
+   Solution:
+     - Check browser console for failed image requests
+     - Test image URL directly in browser
+     - Check if item.poster and item.backdrop are valid URLs
+     - Firewall might be blocking TMDB CDN
+
+5. Data not updating after backend changes
+   Problem: Client cache still valid (8-hour TTL)
+   Solution:
+     - Wait 8 hours for cache to expire (automatic)
+     - OR force reload: Ctrl+Shift+R (or Cmd+Shift+R on Mac)
+     - OR clear cache in code: apiCache.data = {}; apiCache.timestamps = {}
+     - OR change CACHE_DURATION to shorter time (e.g., 5 minutes)
+
+6. Tailscale not working
+   Problem: Backend URL not resolving correctly
+   Solution:
+     - Check CURRENT_HOST value: console.log(CURRENT_HOST)
+     - Verify Tailscale is running on both devices
+     - Check firewall allows port 5001 and 8080
+     - Test backend URL: http://[tailscale-host]:5001/api/health
+*/
+
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CUSTOMIZATION IDEAS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/*
+HOW TO CUSTOMIZE THIS FILE:
+
+1. Change cache duration
+   Line: 169 (CACHE_DURATION)
+   Change: CACHE_DURATION: 8 * 60 * 60 * 1000
+   To: CACHE_DURATION: 1 * 60 * 60 * 1000  // 1 hour instead of 8
+
+2. Add more backend ports to try
+   Line: 62 (BACKEND_PORTS)
+   Change: const BACKEND_PORTS = [5001, 5000];
+   To: const BACKEND_PORTS = [5001, 5000, 5002, 3000];
+
+3. Increase port detection timeout
+   Line: 100 (AbortSignal.timeout)
+   Change: signal: AbortSignal.timeout(1000)
+   To: signal: AbortSignal.timeout(3000)  // Wait 3 seconds instead of 1
+
+4. Add localStorage caching (survives page reloads)
+   Currently: Cache in memory (apiCache object)
+   Could: Save cache to localStorage
+   Example:
+     localStorage.setItem('mediaCache', JSON.stringify(apiCache));
+     const cached = JSON.parse(localStorage.getItem('mediaCache'));
+
+5. Add request queue for better error handling
+   Currently: Requests fail silently and use fallback
+   Could: Queue failed requests and retry when backend comes back online
+
+6. Add loading states
+   Currently: Returns fallback data immediately
+   Could: Return loading indicators while fetching
+   Example:
+     return { loading: true, data: null };
+
+7. Add request deduplication
+   Currently: Multiple simultaneous requests for same endpoint
+   Could: Deduplicate so only one request is made
+   Example:
+     const pendingRequests = {};
+     if (pendingRequests[endpoint]) return pendingRequests[endpoint];
+
+8. Add prefetching
+   Currently: Fetch data when needed
+   Could: Prefetch likely-needed data in advance
+   Example: When hovering over movie card, prefetch its details
+
+NEXT STEPS:
+  - Monitor cache hit rate in console
+  - Add cache warming (pre-fetch popular content)
+  - Consider adding Redux for better state management
+  - Add WebSocket support for real-time updates
+  - Implement service worker for offline support
+*/
+// router.jsx — Simple hash-based routing for category pages
+
+
+// Simple hash router hook
+function useRouter() {
+  const [route, setRoute] = useState(() => {
+    const hash = window.location.hash.slice(1) || 'home';
+    return parseRoute(hash);
+  });
+
+  useEffect(() => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.slice(1) || 'home';
+      setRoute(parseRoute(hash));
+    };
+
+    window.addEventListener('hashchange', handleHashChange);
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, []);
+
+  return route;
+}
+
+function parseRoute(hash) {
+  const parts = hash.split('/');
+  const page = parts[0] || 'home';
+
+  // Parse detail pages: detail/movie/123
+  if (page === 'detail' && parts.length === 3) {
+    return {
+      page: 'detail',
+      params: {
+        mediaType: parts[1],
+        mediaId: parts[2]
+      }
+    };
+  }
+
+  // Parse sport detail: sport/{gameId}
+  if (page === 'sport' && parts.length === 2) {
+    return { page: 'sport', params: { gameId: parts[1] } };
+  }
+
+  // Parse genre pages: genre/movies or genre/movies/Action
+  if (page === 'genre' && parts.length >= 2) {
+    return {
+      page: 'genre',
+      params: {
+        mediaType: parts[1],
+        genreName: parts[2] ? decodeURIComponent(parts[2]) : null
+      }
+    };
+  }
+
+  return {
+    page: page,
+    params: parts.slice(1)
+  };
+}
+
+function navigate(path) {
+  window.location.hash = path;
+}
+
+// Category Page Component
+function CategoryPage({ category, title, fetchEndpoint }) {
+  const [items, setItems] = useState([]);
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [totalPages] = useState(5); // We'll show 5 pages max (20 items per page = 100 total)
+
+  useEffect(() => {
+    loadPage(1);
+  }, [category]);
+
+  async function loadPage(pageNum) {
+    setLoading(true);
+    try {
+      const data = await window.fetchWithCache(`${fetchEndpoint}?page=${pageNum}`);
+      setItems(data || []);
+      setPage(pageNum);
+    } catch (error) {
+      console.error('Failed to load category page:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: '80px var(--gutter)', textAlign: 'center' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>📽️</div>
+        <div style={{ fontSize: '18px', color: 'var(--txt-1)' }}>Loading {title}...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="category-page">
+      <div className="category-header">
+        <button className="back-button" onClick={() => navigate('home')}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="m15 6-6 6 6 6"/>
+          </svg>
+          Back to Home
+        </button>
+        <h1 className="category-title">{title}</h1>
+        <div className="category-subtitle">{items.length} items • Page {page} of {totalPages}</div>
+      </div>
+
+      <div className="category-grid">
+        {items.map(item => (
+          <CategoryCard
+            key={item.id}
+            item={ITEMS[item.id] || item}
+            glowMode="tone"
+            glowIntensity={1.7}
+            cardRadius={21}
+          />
+        ))}
+      </div>
+
+      <div className="pagination">
+        <button
+          className="pagination-btn"
+          onClick={() => loadPage(page - 1)}
+          disabled={page === 1}
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="m15 6-6 6 6 6"/>
+          </svg>
+          Previous
+        </button>
+
+        <div className="pagination-numbers">
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map(num => (
+            <button
+              key={num}
+              className={`pagination-number ${num === page ? 'is-active' : ''}`}
+              onClick={() => loadPage(num)}
+            >
+              {num}
+            </button>
+          ))}
+        </div>
+
+        <button
+          className="pagination-btn"
+          onClick={() => loadPage(page + 1)}
+          disabled={page === totalPages}
+        >
+          Next
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="m9 6 6 6-6 6"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Lazy loading image component (same as in components.jsx)
+function LazyImageCat({ src, alt = "", ...props }) {
+  const imgRef = useRef(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [imageSrc, setImageSrc] = useState('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 450"%3E%3Crect fill="%23161b26" width="300" height="450"/%3E%3C/svg%3E');
+
+  useEffect(() => {
+    const img = imgRef.current;
+    if (!img) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && !isLoaded) {
+            setImageSrc(src);
+            setIsLoaded(true);
+          }
+        });
+      },
+      {
+        rootMargin: '200px',
+        threshold: 0.01
+      }
+    );
+
+    observer.observe(img);
+    return () => { if (img) observer.unobserve(img); };
+  }, [src, isLoaded]);
+
+  return <img ref={imgRef} src={imageSrc} alt={alt} draggable="false" {...props} />;
+}
+
+// Larger card for category pages (portrait poster style)
+function CategoryCard({ item, glowMode, glowIntensity, cardRadius }) {
+  const ref = useRef(null);
+  const [hover, setHover] = useState(false);
+  const [tilt, setTilt] = useState({ rx: 0, ry: 0 });
+  const tone = glowMode === 'tone' ? item.tone : '#5BB7FF';
+
+  function handleClick() {
+    const [type, id] = item.id.split('_');
+    navigate(`detail/${type}/${id}`);
+  }
+
+  function onMove(e) {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width;
+    const py = (e.clientY - r.top) / r.height;
+    const ry = (px - 0.5) * 8;
+    const rx = (0.5 - py) * 6;
+    setTilt({ rx, ry });
+  }
+
+  function onLeave() {
+    setHover(false);
+    setTilt({ rx: 0, ry: 0 });
+  }
+
+  const style = {
+    '--glow': tone,
+    '--glow-a': hexA(tone, 0.55 * glowIntensity),
+    '--glow-b': hexA(tone, 0.32 * glowIntensity),
+    '--glow-c': hexA(tone, 0.18 * glowIntensity),
+    '--card-radius': cardRadius + 'px',
+  };
+
+  return (
+    <div
+      ref={ref}
+      className={'category-card' + (hover ? ' is-hover' : '')}
+      tabIndex={0}
+      style={style}
+      onMouseEnter={() => setHover(true)}
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      onFocus={() => setHover(true)}
+      onBlur={onLeave}
+      onClick={handleClick}
+    >
+      <div className="category-card__shelf" aria-hidden="true"></div>
+      <div
+        className="category-card__lift"
+        style={{
+          transform: hover
+            ? `perspective(1200px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg) translateY(-8px) scale(1.05)`
+            : 'perspective(1200px) rotateX(0) rotateY(0) translateY(0) scale(1)'
+        }}
+      >
+        <div className="category-card__art">
+          <LazyImageCat src={item.poster || landscapeUrl(item)} alt={item.title} />
+          <div className="card__glass-rim"></div>
+          <div className="card__reflection"></div>
+          <div className="card__sheen" style={{ '--mx': (tilt.ry + 5) * 4 + 'px', '--my': (-tilt.rx + 4) * 4 + 'px' }}></div>
+          <div className="card__top-light"></div>
+          <div className="card__inner-stroke"></div>
+        </div>
+      </div>
+
+      <div className="card__neon" aria-hidden="true">
+        <div className="card__neon-cast"></div>
+      </div>
+
+      <div className="category-card__info">
+        <div className="category-card__title">{item.title}</div>
+        <div className="category-card__meta">
+          {item.year && <span>{item.year}</span>}
+          {item.rating && <><span className="hero__sep"></span><span>{item.rating}</span></>}
+          {item.vote_average && (
+            <>
+              <span className="hero__sep"></span>
+              <span className="rating-badge">★ {item.vote_average.toFixed(1)}</span>
+            </>
+          )}
+        </div>
+        {item.overview && (
+          <div className="category-card__overview">
+            {item.overview.slice(0, 150)}{item.overview.length > 150 ? '...' : ''}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Export to global scope
+Object.assign(window, {
+  useRouter,
+  navigate,
+  CategoryPage,
+  CategoryCard
+});
+// detail-page.jsx — Movie/TV Show detail page
+
+
+// iOS blocks cross-origin iframe autoplay at the WebKit level — detect once
+const IS_IOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+function DetailPage({ mediaType, mediaId }) {
+  const [item, setItem] = useState(null);
+  const [similar, setSimilar] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [progressData, setProgressData] = useState(null);
+  const [downloading, setDownloading] = useState(null);
+  const [inList, setInList] = useState(false);
+  const [selectedSeason, setSelectedSeason] = useState(1);
+  const [seasonDropdownOpen, setSeasonDropdownOpen] = useState(false);
+  const [episodes, setEpisodes] = useState([]);
+  const [episodesLoading, setEpisodesLoading] = useState(false);
+  const [watchedEpisodes, setWatchedEpisodes] = useState(new Set());
+  const [trailerKey, setTrailerKey] = useState(null);
+  // Desktop: showTrailer swaps the banner to the autoplaying iframe
+  // iOS: showTrailerBtn reveals the Watch Trailer button → trailerOpen opens modal
+  const [showTrailer, setShowTrailer] = useState(false);
+  const [showTrailerBtn, setShowTrailerBtn] = useState(false);
+  const trailerTimerRef = useRef(null);
+  const loadedIdRef = useRef(null);
+
+  // Reset everything when navigating to a different item
+  useEffect(() => {
+    setSelectedSeason(1);
+    setEpisodes([]);
+    setSeasonDropdownOpen(false);
+    setTrailerKey(null);
+    setShowTrailer(false);
+    setShowTrailerBtn(false);
+    clearTimeout(trailerTimerRef.current);
+    setWatchedEpisodes(new Set());
+  }, [mediaId]);
+
+  // Load watched episodes for TV/anime
+  useEffect(() => {
+    if (!mediaId || (mediaType !== 'tv' && mediaType !== 'anime')) return;
+    const pid = window.currentProfileId || 1;
+    fetch(`${window.API_BASE_URL}/progress/watched-episodes/${mediaId}?profile_id=${pid}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) {
+          setWatchedEpisodes(new Set((d.data || []).map(e => `${e.season}_${e.episode}`)));
+        }
+      })
+      .catch(() => {});
+  }, [mediaId, mediaType]);
+
+  useEffect(() => {
+    loadDetails();
+    loadProgress();
+    checkInList();
+  }, [mediaType, mediaId]);
+
+  // Fetch trailer, then after 5 s: autoplay in banner (desktop) or show button (iOS)
+  useEffect(() => {
+    if (!mediaId) return;
+    setTrailerKey(null);
+    setShowTrailer(false);
+    setShowTrailerBtn(false);
+    clearTimeout(trailerTimerRef.current);
+    fetch(`${window.API_BASE_URL}/trailer/${mediaType}/${mediaId}`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.key) {
+          setTrailerKey(d.key);
+          trailerTimerRef.current = setTimeout(() => {
+            if (IS_IOS) {
+              setShowTrailerBtn(true);
+            } else {
+              setShowTrailer(true);
+            }
+          }, 5000);
+        }
+      })
+      .catch(() => {});
+    return () => clearTimeout(trailerTimerRef.current);
+  }, [mediaType, mediaId]);
+
+  // Load episodes when item is ready or season changes
+  useEffect(() => {
+    if (item && (mediaType === 'tv' || mediaType === 'anime') && item.seasons && item.seasons.length > 0) {
+      loadEpisodes(item.tmdb_id, selectedSeason);
+    }
+  }, [item, selectedSeason]);
+
+  async function loadDetails() {
+    // Skip the loading spinner if we already have this item rendered
+    const alreadyLoaded = loadedIdRef.current === `${mediaType}_${mediaId}`;
+    if (!alreadyLoaded) setLoading(true);
+    try {
+      const pid = window.currentProfileId || 1;
+      const data = await window.fetchWithCache(`/details/${mediaType}/${mediaId}?profile_id=${pid}`, { noBackground: true });
+      loadedIdRef.current = `${mediaType}_${mediaId}`;
+      setItem(data);
+      loadSimilar(mediaType);
+    } catch (error) {
+      console.error('Failed to load details:', error);
+      const cachedItem = ITEMS[`${mediaType}_${mediaId}`];
+      if (cachedItem) {
+        loadedIdRef.current = `${mediaType}_${mediaId}`;
+        setItem(cachedItem);
+        loadSimilar(mediaType);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadEpisodes(tmdbId, seasonNum) {
+    setEpisodesLoading(true);
+    try {
+      const response = await fetch(`${window.API_BASE_URL}/tv/${tmdbId}/season/${seasonNum}`);
+      const result = await response.json();
+      if (result.success) setEpisodes(result.data);
+    } catch (error) {
+      console.error('Failed to load episodes:', error);
+    } finally {
+      setEpisodesLoading(false);
+    }
+  }
+
+  function playEpisode(seasonNum, episodeNum, startOver = false) {
+    const currentSeason = item.seasons?.find(s => s.season_number === seasonNum);
+    const totalEpisodes = currentSeason?.episode_count || 0;
+    const mediaRef = item.imdb_id || item.tmdb_id;
+    const idKey = item.imdb_id ? 'imdb' : 'tmdb';
+    const src = `https://vidsrc-embed.ru/embed/tv?${idKey}=${mediaRef}&season=${seasonNum}&episode=${episodeNum}`;
+    const epTitle = encodeURIComponent(`${item.title} S${seasonNum}E${episodeNum}`);
+    const idParam = item.imdb_id ? `imdbId=${item.imdb_id}` : `tmdbId=${item.tmdb_id}`;
+    const posterP   = encodeURIComponent(item.poster   || '');
+    const backdropP = encodeURIComponent(item.backdrop || '');
+    const toneP     = encodeURIComponent(item.tone     || '#5BB7FF');
+    const soParam   = startOver ? '&startOver=1' : '';
+    const genreP    = encodeURIComponent(item.genre || '');
+    window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${epTitle}&src=${encodeURIComponent(src)}&season=${seasonNum}&episode=${episodeNum}&totalEpisodes=${totalEpisodes}&${idParam}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}&genre=${genreP}${soParam}`;
+  }
+
+  async function loadSimilar(type) {
+    try{
+      let endpoint = '/movies';
+      if (type === 'tv') endpoint = '/tv';
+      else if (type === 'anime') endpoint = '/anime';
+
+      const data = await window.fetchWithCache(endpoint);
+      setSimilar(data.slice(0, 8)); // Get 8 similar items
+    } catch (error) {
+      console.error('Failed to load similar:', error);
+    }
+  }
+
+  async function loadProgress() {
+    try {
+      const pid = window.currentProfileId || 1;
+      const response = await fetch(`${window.API_BASE_URL}/progress/${mediaType}/${mediaId}?profile_id=${pid}`);
+      const result = await response.json();
+      if (result.success && result.data) {
+        setProgress(result.data.progress);
+        setProgressData(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to load progress:', error);
+    }
+  }
+
+  async function checkInList() {
+    try {
+      const pid = window.currentProfileId || 1;
+      const response = await fetch(`${window.API_BASE_URL}/list/check/${mediaType}/${mediaId}?profile_id=${pid}`);
+      const result = await response.json();
+      if (result.success) {
+        setInList(result.in_list);
+      }
+    } catch (error) {
+      console.error('Failed to check list:', error);
+    }
+  }
+
+  async function toggleList() {
+    const pid = window.currentProfileId || 1;
+    try {
+      if (inList) {
+        await fetch(`${window.API_BASE_URL}/list/remove/${mediaType}/${mediaId}?profile_id=${pid}`, { method: 'DELETE' });
+        setInList(false);
+      } else {
+        await fetch(`${window.API_BASE_URL}/list/add`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            profile_id: pid,
+            media_id: mediaId,
+            media_type: mediaType,
+            title: item.title,
+            poster: item.poster || '',
+            backdrop: item.backdrop || '',
+            tone: item.tone || '#5BB7FF'
+          })
+        });
+        setInList(true);
+      }
+      window.clearCacheEntry(`/list?profile_id=${pid}`);
+    } catch (error) {
+      console.error('Failed to toggle list:', error);
+    }
+  }
+
+  async function downloadItem(season, episode, epTitle) {
+    const key = season ? `s${season}e${episode}` : 'movie';
+    if (downloading === key) return;
+    setDownloading(key);
+    try {
+      // Resolve stream URL first (uses cache when available)
+      const pid = window.currentProfileId || 1;
+      let streamUrl = `${window.API_BASE_URL}/stream/${mediaType}/${mediaId}`;
+      const sp = new URLSearchParams();
+      if (item.imdb_id) sp.set('imdbId', item.imdb_id);
+      if (season)  { sp.set('season', season); sp.set('episode', episode); }
+      const result = await fetch(`${streamUrl}?${sp}`).then(r => r.json());
+      if (!result.success) throw new Error(result.error || 'Stream not found');
+
+      const { stream_url, filename } = result.data;
+      const dlTitle = epTitle || item.title;
+      const proxyParams = new URLSearchParams({ url: stream_url, download: '1', dlname: dlTitle });
+      if (filename) proxyParams.set('filename', filename);
+      window.location.href = `${window.API_BASE_URL}/stream/proxy?${proxyParams}`;
+    } catch (err) {
+      console.error('Download failed:', err);
+      alert('Could not start download: ' + err.message);
+    } finally {
+      setTimeout(() => setDownloading(null), 4000);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div style={{ padding: '80px var(--gutter)', textAlign: 'center' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎬</div>
+        <div style={{ fontSize: '18px', color: 'var(--txt-1)' }}>Loading details...</div>
+      </div>
+    );
+  }
+
+  if (!item) {
+    return (
+      <div style={{ padding: '80px var(--gutter)', textAlign: 'center' }}>
+        <div style={{ fontSize: '48px', marginBottom: '16px' }}>😕</div>
+        <div style={{ fontSize: '18px', color: 'var(--txt-1)', marginBottom: '24px' }}>Content not found</div>
+        <button className="btn btn--glass" onClick={() => navigate('home')}>Back to Home</button>
+      </div>
+    );
+  }
+
+  const hasProgress = progress > 0;
+  const overview = item.overview || item.synopsis || 'No description available.';
+  const shouldTruncate = overview.length > 300;
+  const displayText = (!expanded && shouldTruncate) ? overview.slice(0, 300) + '...' : overview;
+
+  return (
+    <div className="detail-page">
+      {/* Hero Backdrop / Trailer */}
+      <div className="detail-hero" style={{ '--detail-tone': item.tone }}>
+        <img
+          src={item.backdrop_large || item.backdrop || backdropUrl(item)}
+          alt=""
+          className={'detail-hero__img' + (showTrailer ? ' detail-hero__img--hidden' : '')}
+        />
+
+        {/* Trailer iframe — autoplays muted on desktop; tap-to-play inline on iOS */}
+        {showTrailer && trailerKey && (
+          <iframe
+            className={'detail-hero__trailer' + (IS_IOS ? ' detail-hero__trailer--ios' : '')}
+            src={IS_IOS
+              ? `https://www.youtube.com/embed/${trailerKey}?autoplay=0&rel=0&playsinline=1&modestbranding=1`
+              : `https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&rel=0&playsinline=1&modestbranding=1`}
+            allow="autoplay; fullscreen"
+            allowFullScreen
+          />
+        )}
+
+        {/* Dismiss button — shown once trailer is in the banner */}
+        {showTrailer && (
+          <button
+            className="detail-hero__trailer-dismiss"
+            onClick={() => { setShowTrailer(false); clearTimeout(trailerTimerRef.current); }}
+            aria-label="Close trailer"
+          >
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        )}
+
+        {/* iOS: Watch Trailer button — tapping it swaps backdrop for the iframe */}
+        {showTrailerBtn && !showTrailer && trailerKey && (
+          <button className="detail-hero__trailer-btn" onClick={() => setShowTrailer(true)}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+              <path d="M8 5v14l11-7z"/>
+            </svg>
+            Watch Trailer
+          </button>
+        )}
+
+        <div className="detail-hero__scrim"></div>
+        <div className="detail-hero__tone"></div>
+      </div>
+
+      {/* Content */}
+      <div className="detail-content">
+        <button className="back-button detail-back" onClick={() => {
+          const dest = mediaType === 'movie' ? 'movies' : mediaType === 'anime' ? 'anime' : 'tv';
+          window.navigate(dest);
+        }}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="m15 6-6 6 6 6"/>
+          </svg>
+          Back
+        </button>
+
+        <div className="detail-main">
+          {/* Poster */}
+          <div className="detail-poster">
+            <img src={item.poster || posterUrl(item)} alt={item.title} />
+            <div className="detail-poster__glow" style={{ background: `radial-gradient(circle at 50% 100%, ${item.tone}40 0%, transparent 70%)` }}></div>
+          </div>
+
+          {/* Info */}
+          <div className="detail-info">
+            <h1 className="detail-title">{item.title}</h1>
+
+            <div className="detail-meta">
+              {item.year && <span>{item.year}</span>}
+              {item.rating && <><span className="meta-sep">•</span><span className="rating-badge">{item.rating}</span></>}
+              {item.runtime && <><span className="meta-sep">•</span><span>{item.runtime}</span></>}
+              {item.vote_average && (
+                <>
+                  <span className="meta-sep">•</span>
+                  <span className="star-rating">★ {item.vote_average.toFixed(1)}</span>
+                </>
+              )}
+            </div>
+
+            {item.genre && (
+              <div className="detail-genres">
+                {item.genre.split(' · ').map((g, i) => (
+                  <span key={i} className="genre-tag">{g}</span>
+                ))}
+              </div>
+            )}
+
+            {/* Play/Resume Section */}
+            <div className="detail-actions">
+              <button
+                className="btn btn--primary btn--large"
+                onClick={() => {
+                  if ((mediaType === 'tv' || mediaType === 'anime') && item.seasons && item.seasons.length > 0) {
+                    playEpisode(1, 1);
+                  } else {
+                    const posterP   = encodeURIComponent(item.poster   || '');
+                    const backdropP = encodeURIComponent(item.backdrop || '');
+                    const toneP     = encodeURIComponent(item.tone     || '#5BB7FF');
+                    const idKey2    = item.imdb_id ? `imdb=${item.imdb_id}` : `tmdb=${item.tmdb_id}`;
+                    const embedSrc  = `https://vidsrc-embed.ru/embed/movie?${idKey2}`;
+                    const imdbParam = item.imdb_id ? `&imdbId=${item.imdb_id}` : '';
+                    const genreP2   = encodeURIComponent(item.genre || '');
+                    window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${encodeURIComponent(item.title)}&src=${encodeURIComponent(embedSrc)}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}&genre=${genreP2}${imdbParam}`;
+                  }
+                }}
+              >
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                  <path fill="currentColor" d="M8 5v14l11-7z"/>
+                </svg>
+                {hasProgress ? 'Resume' : 'Play'}
+              </button>
+
+              {/* Start Over — only shown when there's saved progress */}
+              {hasProgress && (
+                <button
+                  className="btn btn--glass btn--large"
+                  onClick={() => {
+                    if ((mediaType === 'tv' || mediaType === 'anime') && item.seasons && item.seasons.length > 0) {
+                      playEpisode(1, 1, true);
+                    } else {
+                      const posterP   = encodeURIComponent(item.poster   || '');
+                      const backdropP = encodeURIComponent(item.backdrop || '');
+                      const toneP     = encodeURIComponent(item.tone     || '#5BB7FF');
+                      const idKey2    = item.imdb_id ? `imdb=${item.imdb_id}` : `tmdb=${item.tmdb_id}`;
+                      const embedSrc  = `https://vidsrc-embed.ru/embed/movie?${idKey2}`;
+                      const imdbParam = item.imdb_id ? `&imdbId=${item.imdb_id}` : '';
+                      const genreP3   = encodeURIComponent(item.genre || '');
+                      window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${encodeURIComponent(item.title)}&src=${encodeURIComponent(embedSrc)}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}&genre=${genreP3}${imdbParam}&startOver=1`;
+                    }
+                  }}
+                >
+                  <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                    <path d="M3 3v5h5"/>
+                  </svg>
+                  Start Over
+                </button>
+              )}
+
+              <button className="btn btn--glass btn--large" onClick={toggleList}>
+                <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  {inList ? (
+                    <path d="M5 13l4 4L19 7"/>
+                  ) : (
+                    <path d="M12 5v14M5 12h14"/>
+                  )}
+                </svg>
+                {inList ? 'In My List' : 'My List'}
+              </button>
+              <button className="btn btn--glass btn--icon btn--large" aria-label="Share">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                  <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>
+                </svg>
+              </button>
+
+              {/* Download — movies only; TV has per-episode buttons */}
+              {mediaType === 'movie' && (
+                <button
+                  className={'btn btn--glass btn--icon btn--large' + (downloading === 'movie' ? ' is-loading' : '')}
+                  aria-label="Download"
+                  onClick={() => downloadItem(null, null, item.title)}
+                  disabled={downloading === 'movie'}
+                >
+                  {downloading === 'movie' ? (
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                      <circle cx="12" cy="12" r="10" opacity="0.25"/>
+                      <path d="M12 2 A10 10 0 0 1 22 12" opacity="0.75">
+                        <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                      </path>
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                    </svg>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {/* Progress Bar */}
+            {hasProgress && (
+              <div className="detail-progress">
+                {progressData?.season > 0 && (
+                  <div className="detail-progress-episode">
+                    S{progressData.season} E{progressData.episode}
+                  </div>
+                )}
+                <div className="detail-progress-bar">
+                  <div
+                    className="detail-progress-fill"
+                    style={{
+                      width: `${progress * 100}%`,
+                      background: `linear-gradient(90deg, ${item.tone}, white)`
+                    }}
+                  ></div>
+                </div>
+                <div className="detail-progress-text">
+                  {Math.round(progress * 100)}% watched • {Math.round((1 - progress) * 120)} min remaining
+                </div>
+              </div>
+            )}
+
+            {/* Description */}
+            <div className="detail-description">
+              <h2 className="detail-section-title">Overview</h2>
+              <p className="detail-overview">
+                {displayText}
+                {shouldTruncate && (
+                  <button
+                    className="see-more-btn"
+                    onClick={() => setExpanded(!expanded)}
+                  >
+                    {expanded ? 'Show less' : 'See more'}
+                  </button>
+                )}
+              </p>
+            </div>
+
+            {/* Cast / Additional Info */}
+            {item.cast && item.cast.length > 0 && (
+              <div className="detail-cast">
+                <h3 className="detail-subsection-title">Cast</h3>
+                <div className="detail-cast-list">
+                  {item.cast.slice(0, 5).map((actor, i) => (
+                    <div key={i} className="cast-member">
+                      <span className="cast-name">{actor.name}</span>
+                      <span className="cast-character">{actor.character}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Seasons & Episodes — TV/Anime only */}
+        {(mediaType === 'tv' || mediaType === 'anime') && item && item.seasons && item.seasons.length > 0 && (
+          <div className="detail-seasons">
+            <div className="seasons-header">
+              <h2 className="detail-section-title">Episodes</h2>
+              <div className="season-selector">
+                <button
+                  className="season-dropdown-btn"
+                  onClick={() => setSeasonDropdownOpen(o => !o)}
+                >
+                  {item.seasons.find(s => s.season_number === selectedSeason)?.name || `Season ${selectedSeason}`}
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                    <path d={seasonDropdownOpen ? 'M18 15l-6-6-6 6' : 'M6 9l6 6 6-6'}/>
+                  </svg>
+                </button>
+                {seasonDropdownOpen && (
+                  <div className="season-dropdown">
+                    {item.seasons.map(s => (
+                      <button
+                        key={s.season_number}
+                        className={`season-option${s.season_number === selectedSeason ? ' active' : ''}`}
+                        onClick={() => { setSelectedSeason(s.season_number); setSeasonDropdownOpen(false); }}
+                      >
+                        <span>{s.name}</span>
+                        <span className="season-ep-count">{s.episode_count} ep</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {episodesLoading ? (
+              <div className="episodes-loading">Loading episodes...</div>
+            ) : (
+              <div className="episodes-list">
+                {episodes.map(ep => {
+                  const epKey = `${selectedSeason}_${ep.episode_number}`;
+                  const isWatched = watchedEpisodes.has(epKey);
+                  const isActive = progressData &&
+                    progressData.season === selectedSeason &&
+                    progressData.episode === ep.episode_number;
+                  const activePct = isActive ? Math.round((progressData.progress || 0) * 100) : 0;
+                  return (
+                  <div key={ep.episode_number} className="episode-card" onClick={() => playEpisode(selectedSeason, ep.episode_number)}>
+                    <div className="episode-still">
+                      {ep.still
+                        ? <img src={ep.still} alt={ep.name} loading="lazy" />
+                        : (
+                          <div className="episode-still-placeholder">
+                            <svg viewBox="0 0 24 24" width="32" height="32" fill="currentColor">
+                              <path d="M8 5v14l11-7z"/>
+                            </svg>
+                          </div>
+                        )
+                      }
+                      <div className="episode-play-overlay">
+                        <svg viewBox="0 0 24 24" width="40" height="40">
+                          <circle cx="12" cy="12" r="11" fill="rgba(255,255,255,0.95)"/>
+                          <path fill="#08090d" d="M10 8v8l6-4z"/>
+                        </svg>
+                      </div>
+                      <div className="episode-num-badge">E{ep.episode_number}</div>
+                      {isWatched && (
+                        <div className="ep-watched-check">
+                          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+                            <path d="M5 13l4 4L19 7"/>
+                          </svg>
+                        </div>
+                      )}
+                      {isActive && (
+                        <div className="ep-active-bar">
+                          <div className="ep-active-bar__fill" style={{width: activePct + '%'}}/>
+                        </div>
+                      )}
+                    </div>
+                    <div className="episode-info">
+                      <div className="episode-info-top">
+                        <div className="episode-title">{ep.name}</div>
+                        <button
+                          className="episode-dl-btn"
+                          aria-label="Download episode"
+                          disabled={downloading === `s${selectedSeason}e${ep.episode_number}`}
+                          onClick={e => { e.stopPropagation(); downloadItem(selectedSeason, ep.episode_number, `${item.title}.S${String(selectedSeason).padStart(2,'0')}E${String(ep.episode_number).padStart(2,'0')}`); }}
+                        >
+                          {downloading === `s${selectedSeason}e${ep.episode_number}` ? (
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <circle cx="12" cy="12" r="10" opacity="0.25"/>
+                              <path d="M12 2 A10 10 0 0 1 22 12" opacity="0.75">
+                                <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                              </path>
+                            </svg>
+                          ) : (
+                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+                            </svg>
+                          )}
+                        </button>
+                      </div>
+                      <div className="episode-meta">
+                        {ep.runtime ? <span>{ep.runtime}m</span> : null}
+                        {ep.vote_average > 0 ? <span>★ {ep.vote_average.toFixed(1)}</span> : null}
+                      </div>
+                      {ep.overview ? (
+                        <p className="episode-overview">
+                          {ep.overview.length > 140 ? ep.overview.slice(0, 140) + '…' : ep.overview}
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Similar Content */}
+        {similar.length > 0 && (
+          <div className="detail-similar">
+            <h2 className="detail-section-title">More Like This</h2>
+            <div className="detail-similar-grid">
+              {similar.map(similarItem => {
+                const fullItem = ITEMS[similarItem.id] || similarItem;
+                return (
+                  <div
+                    key={similarItem.id}
+                    className="similar-card"
+                    onClick={() => {
+                      const [type, id] = similarItem.id.split('_');
+                      navigate(`detail/${type}/${id}`);
+                    }}
+                  >
+                    <div className="similar-card__poster">
+                      <img src={fullItem.poster || landscapeUrl(fullItem)} alt={fullItem.title} />
+                      <div className="similar-card__overlay">
+                        <svg viewBox="0 0 24 24" width="32" height="32">
+                          <circle cx="12" cy="12" r="11" fill="rgba(255,255,255,0.95)" />
+                          <path fill="#08090d" d="M10 8v8l6-4z"/>
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="similar-card__info">
+                      <div className="similar-card__title">{fullItem.title}</div>
+                      <div className="similar-card__meta">
+                        {fullItem.year} • {fullItem.rating}
+                        {fullItem.vote_average && ` • ★ ${fullItem.vote_average.toFixed(1)}`}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// Export to global scope
+Object.assign(window, { DetailPage });
+// pages.jsx — Additional page components (Search, Library, Genre pages)
+
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Search Page
+// ─────────────────────────────────────────────────────────────────────────────
+
+const SEARCH_CARD_LIMIT = 4;
+
+function SearchPage() {
+  const [query, setQuery]               = useState('');
+  const [results, setResults]           = useState({ movies: [], tv: [], total: 0 });
+  const [loading, setLoading]           = useState(false);
+  const [searched, setSearched]         = useState(false);
+  const [showSuggest, setShowSuggest]   = useState(false);
+  const [suggestIdx, setSuggestIdx]     = useState(-1);
+  const [moviesExpanded, setMoviesExp]  = useState(false);
+  const [tvExpanded, setTvExp]          = useState(false);
+  const inputRef    = useRef(null);
+  const wrapperRef  = useRef(null);
+  const debounceRef = useRef(null);
+
+  // Build suggestion list from current results (interleaved, max 8)
+  const suggestions = React.useMemo(() => {
+    const mvs = results.movies.slice(0, 5).map(i => ({ ...i, _kind: 'Movie' }));
+    const tvs = results.tv.slice(0, 5).map(i => ({ ...i, _kind: 'TV' }));
+    const merged = [];
+    const len = Math.max(mvs.length, tvs.length);
+    for (let i = 0; i < len; i++) {
+      if (mvs[i]) merged.push(mvs[i]);
+      if (tvs[i]) merged.push(tvs[i]);
+    }
+    return merged.slice(0, 8);
+  }, [results]);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function onDown(e) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
+        setShowSuggest(false);
+      }
+    }
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, []);
+
+  // Debounced search
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    if (!query.trim()) {
+      setResults({ movies: [], tv: [], total: 0 });
+      setSearched(false);
+      setLoading(false);
+      setShowSuggest(false);
+      setMoviesExp(false);
+      setTvExp(false);
+      return;
+    }
+    setLoading(true);
+    setSearched(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const data = await window.fetchWithCache(`/search?q=${encodeURIComponent(query)}`);
+        setResults(data);
+        setShowSuggest(true);
+        setSuggestIdx(-1);
+        setMoviesExp(false);
+        setTvExp(false);
+      } catch {
+        setResults({ movies: [], tv: [], total: 0 });
+      } finally {
+        setLoading(false);
+      }
+    }, 350);
+    return () => clearTimeout(debounceRef.current);
+  }, [query]);
+
+  function goToItem(item) {
+    const [type, id] = item.id.split ? item.id.split('_') : [item._kind === 'Movie' ? 'movie' : 'tv', item.id];
+    navigate(`detail/${type}/${id}`);
+  }
+
+  function onKeyDown(e) {
+    if (!showSuggest || suggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setSuggestIdx(i => Math.min(i + 1, suggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setSuggestIdx(i => Math.max(i - 1, -1));
+    } else if (e.key === 'Enter' && suggestIdx >= 0) {
+      e.preventDefault();
+      goToItem(suggestions[suggestIdx]);
+    } else if (e.key === 'Escape') {
+      setShowSuggest(false);
+    }
+  }
+
+  function SectionCards({ items, expanded, onExpand, label }) {
+    const visible = expanded ? items : items.slice(0, SEARCH_CARD_LIMIT);
+    const hidden = items.length - SEARCH_CARD_LIMIT;
+    return (
+      <div className="search-section">
+        <div className="search-section-head">
+          <h2 className="search-section-title">{label}</h2>
+          {!expanded && hidden > 0 && (
+            <button className="search-view-all" onClick={onExpand}>
+              View all {items.length}
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="m9 6 6 6-6 6"/>
+              </svg>
+            </button>
+          )}
+        </div>
+        <div className="search-grid">
+          {visible.map(item => (
+            <CategoryCard key={item.id} item={item} glowMode="tone" glowIntensity={1.7} cardRadius={21} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="search-page">
+      <div className="search-header">
+        <button className="back-button" onClick={() => navigate('home')}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="m15 6-6 6 6 6"/>
+          </svg>
+          Back to Home
+        </button>
+        <h1 className="page-title">Search</h1>
+      </div>
+
+      <form className="search-form" onSubmit={e => e.preventDefault()}>
+        <div className="search-input-wrapper" ref={wrapperRef}>
+          <svg className="search-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            ref={inputRef}
+            type="text"
+            className="search-input"
+            placeholder="Movies, shows, anime..."
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            onFocus={() => suggestions.length > 0 && setShowSuggest(true)}
+            onKeyDown={onKeyDown}
+            autoComplete="off"
+          />
+          {query && (
+            <button type="button" className="search-clear"
+              onClick={() => { setQuery(''); setShowSuggest(false); inputRef.current?.focus(); }}>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M18 6 6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          )}
+          {loading && (
+            <div className="search-spinner">
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <circle cx="12" cy="12" r="10" opacity="0.25"/>
+                <path d="M12 2 A10 10 0 0 1 22 12" opacity="0.75">
+                  <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="1s" repeatCount="indefinite"/>
+                </path>
+              </svg>
+            </div>
+          )}
+
+          {/* Autocomplete dropdown */}
+          {showSuggest && suggestions.length > 0 && (
+            <div className="search-suggest">
+              {suggestions.map((item, idx) => {
+                const thumbSrc = item.poster
+                  ? `https://image.tmdb.org/t/p/w92${item.poster}`
+                  : (item.backdrop ? `https://image.tmdb.org/t/p/w300${item.backdrop}` : null);
+                return (
+                  <div
+                    key={item.id + idx}
+                    className={'search-suggest__item' + (idx === suggestIdx ? ' is-active' : '')}
+                    onMouseEnter={() => setSuggestIdx(idx)}
+                    onMouseDown={e => { e.preventDefault(); goToItem(item); }}
+                  >
+                    <div className="search-suggest__thumb">
+                      {thumbSrc
+                        ? <img src={thumbSrc} alt="" draggable="false" />
+                        : <div className="search-suggest__thumb-ph" />}
+                    </div>
+                    <div className="search-suggest__info">
+                      <span className="search-suggest__title">{item.title}</span>
+                      {item.year && <span className="search-suggest__year">{item.year}</span>}
+                    </div>
+                    <span className="search-suggest__badge">{item._kind}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </form>
+
+      {!loading && searched && results.total === 0 && (
+        <div className="search-empty">
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>😕</div>
+          <div style={{ fontSize: '18px', marginBottom: '8px' }}>No results found</div>
+          <div style={{ fontSize: '14px', color: 'var(--txt-1)' }}>Try different keywords</div>
+        </div>
+      )}
+
+      {results.total > 0 && (
+        <div className="search-results" onClick={() => setShowSuggest(false)}>
+          {results.movies.length > 0 && (
+            <SectionCards
+              items={results.movies}
+              expanded={moviesExpanded}
+              onExpand={() => setMoviesExp(true)}
+              label="Movies"
+            />
+          )}
+          {results.tv.length > 0 && (
+            <SectionCards
+              items={results.tv}
+              expanded={tvExpanded}
+              onExpand={() => setTvExp(true)}
+              label="TV Shows"
+            />
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Library Page (Continue Watching + Saved List)
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function loadContinueWatching() {
+  const pid = window.currentProfileId || 1;
+  const data = await window.fetchWithCache(`/progress/continue-watching?profile_id=${pid}`) || [];
+  return data.map(item => ({
+    id: `${item.media_type}_${item.media_id}`,
+    mediaId: item.media_id,
+    mediaType: item.media_type,
+    title: item.title,
+    poster: item.poster,
+    backdrop: item.backdrop,
+    tone: item.tone,
+    progress: item.progress,
+    season: item.season || 0,
+    episode: item.episode || 0,
+    genre: item.genre || '',
+    isMovie: item.media_type === 'movie',
+  }));
+}
+
+function HistoryRingProgress({ progress, tone, size }) {
+  const s = size || 52;
+  const r = (s - 12) / 2;
+  const cx = s / 2;
+  const circ = 2 * Math.PI * r;
+  const arc = circ * Math.min(Math.max(progress || 0, 0), 1);
+  const pct = Math.round((progress || 0) * 100);
+  return (
+    <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`} style={{ display: 'block' }}>
+      <circle cx={cx} cy={cx} r={r + 3} fill="rgba(255,255,255,0.92)"/>
+      <circle cx={cx} cy={cx} r={r} fill="none" stroke="rgba(0,0,0,0.1)" strokeWidth="5"/>
+      <circle cx={cx} cy={cx} r={r} fill="none"
+        stroke={tone || '#2f86ff'} strokeWidth="5"
+        strokeLinecap="round"
+        strokeDasharray={`${arc} ${circ - arc}`}
+        transform={`rotate(-90 ${cx} ${cx})`}/>
+      <text x={cx} y={cx} textAnchor="middle" dominantBaseline="central"
+        fill="#08090d" fontSize={Math.round(s * 0.22)} fontWeight="800" fontFamily="system-ui,sans-serif">
+        {pct}%
+      </text>
+    </svg>
+  );
+}
+
+function HistoryListItem({ item, onDelete }) {
+  function handleClick() {
+    navigate(`detail/${item.mediaType}/${item.mediaId}`);
+  }
+
+  async function handleDelete(e) {
+    e.stopPropagation();
+    const pid = window.currentProfileId || 1;
+    try {
+      await fetch(`${window.API_BASE_URL}/progress/delete/${item.mediaType}/${item.mediaId}?profile_id=${pid}`, { method: 'DELETE' });
+      onDelete?.(item.id);
+    } catch (_) {}
+  }
+
+  const epLabel = item.isMovie
+    ? (item.genre || 'Movie')
+    : (item.genre || (item.season > 0 ? `S${item.season} · E${item.episode}` : 'TV Show'));
+  const pct = Math.round((item.progress || 0) * 100);
+
+  return (
+    <div className="hist-row" onClick={handleClick}>
+      <div className="hist-poster">
+        <img src={posterUrl(item)} alt="" loading="lazy" draggable="false"/>
+        <div className="hist-ring">
+          <HistoryRingProgress progress={item.progress} tone={item.tone} size={52}/>
+        </div>
+      </div>
+      <div className="hist-info">
+        <div className="hist-title">{item.title}</div>
+        <div className="hist-sub">{epLabel}</div>
+        <div className="hist-pct" style={{ color: item.tone || 'var(--acc)' }}>{pct}% watched</div>
+      </div>
+      <button className="hist-del" onClick={handleDelete} aria-label="Remove from history">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="3 6 5 6 21 6"/>
+          <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+          <path d="M10 11v6M14 11v6"/>
+          <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+        </svg>
+      </button>
+    </div>
+  );
+}
+
+function LibraryPage() {
+  const [continueWatching, setContinueWatching] = useState([]);
+  const [savedList, setSavedList] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => { loadLibrary(); }, []);
+
+  async function loadLibrary() {
+    setLoading(true);
+    try {
+      const [cw, listData] = await Promise.all([
+        loadContinueWatching(),
+        window.fetchWithCache(`/list?profile_id=${window.currentProfileId || 1}`).catch(() => []),
+      ]);
+      setContinueWatching(cw || []);
+      setSavedList((listData || []).map(item => ({
+        id: `${item.media_type}_${item.media_id}`,
+        title: item.title,
+        poster: item.poster,
+        backdrop: item.backdrop,
+        tone: item.tone,
+      })));
+    } catch (error) {
+      console.error('Failed to load library:', error);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function openItem(item) {
+    const [type, id] = item.id.split('_');
+    navigate(`detail/${type}/${id}`);
+  }
+
+  if (loading) return <PageSpinner label="Library" />;
+
+  const recent = continueWatching.slice(0, 8);
+  const hasMore = continueWatching.length > 8;
+
+  const cwRow = { id: 'cw-lib', label: 'Continue Watching', layout: 'continue', seeAllLabel: 'History', items: recent };
+
+  return (
+    <div className="library-page">
+      <div className="library-header">
+        <button className="back-button" onClick={() => navigate('home')}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="m15 6-6 6 6 6"/>
+          </svg>
+          Back to Home
+        </button>
+        <h1 className="page-title">My Library</h1>
+      </div>
+
+      <div className="lib-rows">
+        {recent.length > 0 && (
+          <Row row={cwRow} onOpen={openItem} onSeeAll={hasMore ? () => navigate('history') : null}/>
+        )}
+        {savedList.length > 0 && (
+          <section className="lib-section">
+            <div className="lib-section-head">
+              <h2 className="row__title">My List</h2>
+            </div>
+            <div className="lib-portrait-grid">
+              {savedList.map(item => {
+                const [type, id] = item.id.split('_');
+                return (
+                  <button
+                    key={item.id}
+                    className="lib-portrait-card"
+                    onClick={() => navigate(`detail/${type}/${id}`)}
+                  >
+                    <img src={window.posterUrl(item)} alt={item.title} draggable="false" loading="lazy"/>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        )}
+        {recent.length === 0 && savedList.length === 0 && (
+          <div className="lib-empty">
+            <div style={{fontSize:48, marginBottom:16}}>🎬</div>
+            <div style={{fontSize:18, fontWeight:700, marginBottom:8}}>Nothing here yet</div>
+            <div style={{fontSize:14, color:'var(--muted)'}}>Start watching something to see it here.</div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HistoryPage() {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadContinueWatching().then(data => { setItems(data || []); setLoading(false); }).catch(() => setLoading(false));
+  }, []);
+
+  function handleDelete(id) {
+    setItems(prev => prev.filter(i => i.id !== id));
+  }
+
+  if (loading) return <PageSpinner label="History" />;
+
+  return (
+    <div className="hist-page">
+      <div className="library-header">
+        <button className="back-button" onClick={() => navigate('library')}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="m15 6-6 6 6 6"/>
+          </svg>
+          Back to Library
+        </button>
+        <h1 className="page-title">History</h1>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="lib-empty">
+          <div style={{fontSize:48, marginBottom:16}}>🎬</div>
+          <div style={{fontSize:18, fontWeight:700, marginBottom:8}}>Nothing watched yet</div>
+          <div style={{fontSize:14, color:'var(--muted)'}}>Start watching something to see it here.</div>
+        </div>
+      ) : (
+        <div className="hist-list">
+          {items.map(item => (
+            <HistoryListItem key={item.id} item={item} onDelete={handleDelete}/>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Genre-organized pages (Movies, TV, Anime)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function GenreRow({ genreName, items }) {
+  const scrollerRef = useRef(null);
+  const [canL, setCanL] = useState(false);
+  const [canR, setCanR] = useState(true);
+
+  function update() {
+    const el = scrollerRef.current;
+    if (!el) return;
+    setCanL(el.scrollLeft > 4);
+    setCanR(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }
+
+  useEffect(() => {
+    update();
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      el.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
+  }, []);
+
+  function nudge(dir) {
+    const el = scrollerRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * Math.round(el.clientWidth * 0.85), behavior: 'smooth' });
+  }
+
+  return (
+    <section className="genre-section">
+      <h2 className="genre-section-title">{genreName}</h2>
+      <div className="row__wrap">
+        <button
+          className={'rownav rownav--l' + (canL ? '' : ' is-off')}
+          aria-label="Scroll left"
+          onClick={() => nudge(-1)}
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="m15 6-6 6 6 6"/>
+          </svg>
+        </button>
+        <div className="genre-row__scroll" ref={scrollerRef}>
+          {items.map(item => (
+            <div key={item.id} className="genre-card-wrapper">
+              <CategoryCard item={item} glowMode="tone" glowIntensity={1.7} cardRadius={21} />
+            </div>
+          ))}
+        </div>
+        <button
+          className={'rownav rownav--r' + (canR ? '' : ' is-off')}
+          aria-label="Scroll right"
+          onClick={() => nudge(1)}
+        >
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="m9 6 6 6-6 6"/>
+          </svg>
+        </button>
+      </div>
+    </section>
+  );
+}
+
+const GENRE_CFG = {
+  movies: { label: 'Movies',   endpoint: '/movies/genres' },
+  tv:     { label: 'TV Shows', endpoint: '/tv/genres'     },
+  anime:  { label: 'Anime',    endpoint: '/anime/genres'  },
+  kids:   { label: 'Kids',     endpoint: '/kids/genres'   },
+};
+
+// Renders a single genre row only once it scrolls near the viewport
+function LazyGenreRow({ genreName, items, onOpen, mediaType }) {
+  const wrapRef = useRef(null);
+  const [revealed, setRevealed] = useState(false);
+
+  React.useLayoutEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    // Rows already near the viewport reveal instantly (before paint) — no flash
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight + 300) {
+      setRevealed(true);
+      return;
+    }
+    const obs = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setRevealed(true); obs.disconnect(); } },
+      { rootMargin: '200px 0px' }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const row = { id: `g-${genreName}`, label: genreName, layout: 'portrait', items };
+  const seeAll = mediaType
+    ? () => navigate(`genre/${mediaType}/${encodeURIComponent(genreName)}`)
+    : null;
+
+  return (
+    <div ref={wrapRef} className={'lazy-genre-row' + (revealed ? ' is-revealed' : '')}>
+      {revealed ? (
+        <Row row={row} onOpen={onOpen} onSeeAll={seeAll}/>
+      ) : (
+        <div className="lazy-genre-row__skeleton">
+          <div className="lazy-genre-row__sk-title"/>
+          <div className="lazy-genre-row__sk-cards">
+            {[0,1,2,3,4,5].map(i => <div key={i} className="lazy-genre-row__sk-card"/>)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function GenrePage({ mediaType, initialGenre }) {
+  const cfg = GENRE_CFG[mediaType] || GENRE_CFG.movies;
+  const [genreData, setGenreData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const sectionRefs = useRef({});
+
+  useEffect(() => {
+    setLoading(true);
+    window.fetchWithCache(cfg.endpoint).then(data => {
+      setGenreData(data || {});
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, [mediaType]);
+
+  // Scroll to the target genre row if coming from a chip click
+  useEffect(() => {
+    if (!initialGenre || !genreData || loading) return;
+    setTimeout(() => {
+      const el = sectionRefs.current[initialGenre];
+      if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 80);
+  }, [initialGenre, genreData, loading]);
+
+  function openItem(item) {
+    const [t, id] = (item.id || '').split('_');
+    navigate(`detail/${t}/${id}`);
+  }
+
+  return (
+    <div className="genre-page">
+      <div className="genre-page-head">
+        <button className="back-button" onClick={() => navigate('home')}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="m15 6-6 6 6 6"/>
+          </svg>
+          Back to Home
+        </button>
+        <h1 className="page-title">{cfg.label}</h1>
+      </div>
+
+      {loading ? <PageSpinner label={cfg.label}/> : (
+        <div className="genre-sections">
+          {Object.entries(genreData || {}).map(([genreName, items]) =>
+            items.length > 0 && (
+              <div key={genreName} ref={el => sectionRefs.current[genreName] = el}>
+                <LazyGenreRow genreName={genreName} items={items} onOpen={openItem}/>
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sports Page
+// ─────────────────────────────────────────────────────────────────────────────
+
+const LEAGUE_TONE = { nba: '#E8853A', nfl: '#3A9E5A', boxing: '#E84040' };
+
+function SportsPage() {
+  const [rows, setRows]       = useState([]);
+  const [loading, setLoading] = useState(true);
+  const timerRef = useRef(null);
+
+  function fmtTime(iso) {
+    if (!iso) return '';
+    try {
+      return new Date(iso).toLocaleString([], {
+        weekday: 'short', month: 'short', day: 'numeric',
+        hour: 'numeric', minute: '2-digit',
+      });
+    } catch (_) { return ''; }
+  }
+
+  function toItems(games, league) {
+    return (games || []).map(g => ({
+      ...g,
+      id: g.id || `${league}-${g.away_team_abbrev}-${g.home_team_abbrev}`,
+      tone: LEAGUE_TONE[league] || '#555',
+      _timeLabel: fmtTime(g.start_time),
+      league,
+    }));
+  }
+
+  async function loadAll() {
+    try {
+      const [r1, r2, r3] = await Promise.all([
+        fetch(`${window.API_BASE_URL}/sports/live?league=nba`).then(r => r.json()).catch(() => ({})),
+        fetch(`${window.API_BASE_URL}/sports/live?league=nfl`).then(r => r.json()).catch(() => ({})),
+        fetch(`${window.API_BASE_URL}/sports/live?league=boxing`).then(r => r.json()).catch(() => ({})),
+      ]);
+
+      const nbaItems    = toItems(r1.success ? r1.data : [], 'nba');
+      const nflItems    = toItems(r2.success ? r2.data : [], 'nfl');
+      const boxingItems = toItems(r3.success ? r3.data : [], 'boxing');
+      const liveItems   = [...nbaItems, ...nflItems, ...boxingItems].filter(g => g.status_state === 'in');
+
+      const built = [];
+      if (liveItems.length)   built.push({ id: 'live-now', label: '🔴 Live Now', layout: 'sport', items: liveItems });
+      if (nbaItems.length)    built.push({ id: 'nba',      label: '🏀 NBA',       layout: 'sport', items: nbaItems });
+      if (nflItems.length)    built.push({ id: 'nfl',      label: '🏈 NFL',       layout: 'sport', items: nflItems });
+      if (boxingItems.length) built.push({ id: 'boxing',   label: '🥊 Boxing',    layout: 'sport', items: boxingItems });
+
+      setRows(built);
+    } catch (_) {
+      setRows([]);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadAll();
+    timerRef.current = setInterval(loadAll, 60000);
+    return () => clearInterval(timerRef.current);
+  }, []);
+
+  function openGame(game) {
+    window._sportDetail = game;
+    window.navigate(`sport/${game.id}`);
+  }
+
+  if (loading) return <PageSpinner label="Loading sports…"/>;
+
+  if (!rows.length) {
+    return (
+      <div style={{textAlign:'center', padding:'80px 24px', color:'rgba(255,255,255,.3)'}}>
+        <div style={{fontSize:64, marginBottom:16}}>🏆</div>
+        <div style={{fontSize:18, fontWeight:600, marginBottom:8, color:'rgba(255,255,255,.5)'}}>No games scheduled</div>
+        <div style={{fontSize:13}}>Check back on game day</div>
+      </div>
+    );
+  }
+
+  return (
+    <React.Fragment>
+      {rows.map(row => <Row key={row.id} row={row} onOpen={openGame}/>)}
+    </React.Fragment>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sport Detail Page
+// ─────────────────────────────────────────────────────────────────────────────
+
+function SportDetailPage({ gameId }) {
+  const game = window._sportDetail || null;
+  const [streamLoading, setStreamLoading] = useState(false);
+  const [streamError, setStreamError] = useState(null);
+
+  // If somehow we land here without game data (direct URL), show a fallback
+  if (!game) {
+    return (
+      <div style={{textAlign:'center', padding:'120px 24px', color:'rgba(255,255,255,.4)'}}>
+        <div style={{fontSize:48, marginBottom:16}}>🏆</div>
+        <div style={{fontSize:18, fontWeight:600, marginBottom:12, color:'rgba(255,255,255,.6)'}}>Game not found</div>
+        <button onClick={() => window.navigate('home')}
+          style={{background:'rgba(255,255,255,.1)', border:'1px solid rgba(255,255,255,.15)',
+                  color:'#fff', padding:'10px 24px', borderRadius:99, cursor:'pointer', fontFamily:'inherit', fontSize:14}}>
+          ← Back
+        </button>
+      </div>
+    );
+  }
+
+  const isLive = game.status_state === 'in';
+  const tone   = game.tone || LEAGUE_TONE[(game.league || '').toLowerCase()] || '#555';
+
+  function watchGame() {
+    if (!game.stream_url) return;
+    const title = `${game.away_team} vs ${game.home_team}`;
+    window.location.href = `/player.html?type=sports&id=${game.id}&title=${encodeURIComponent(title)}&src=${encodeURIComponent(game.stream_url)}`;
+  }
+
+  const LeagueBadge = ({ league }) => {
+    const icons = { NBA: '🏀', NFL: '🏈', BOXING: '🥊' };
+    return (
+      <span style={{display:'inline-flex', alignItems:'center', gap:6,
+                    fontSize:12, fontWeight:700, letterSpacing:'.06em', textTransform:'uppercase',
+                    color:'rgba(255,255,255,.5)'}}>
+        {icons[(league||'').toUpperCase()] || '🏆'} {league}
+      </span>
+    );
+  };
+
+  const TeamBlock = ({ logo, name, abbrev }) => {
+    const [err, setErr] = useState(false);
+    return (
+      <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:14, flex:1}}>
+        {logo && !err
+          ? <img src={logo} alt={abbrev} onError={() => setErr(true)}
+              style={{width:clamp(80,120), height:clamp(80,120), objectFit:'contain',
+                      filter:'drop-shadow(0 4px 20px rgba(0,0,0,.5))'}}/>
+          : <div style={{width:100, height:100, borderRadius:16,
+                          background:'rgba(255,255,255,.07)',
+                          display:'flex', alignItems:'center', justifyContent:'center', fontSize:44}}>
+              {LEAGUE_ICONS_MAP[(game.league||'').toLowerCase()] || '🏆'}
+            </div>}
+        <div style={{fontSize:15, fontWeight:700, textAlign:'center', letterSpacing:'.02em',
+                     color:'rgba(255,255,255,.85)', maxWidth:140, lineHeight:1.3}}>{name}</div>
+        {abbrev && abbrev !== name &&
+          <div style={{fontSize:11, fontWeight:600, color:'rgba(255,255,255,.35)',
+                       letterSpacing:'.06em', textTransform:'uppercase'}}>{abbrev}</div>}
+      </div>
+    );
+  };
+
+  function clamp(min, max) { return `clamp(${min}px, 10vw, ${max}px)`; }
+
+  return (
+    <div style={{minHeight:'80vh', padding:'0 0 80px'}}>
+      {/* Tone gradient background */}
+      <div style={{position:'fixed', inset:0, zIndex:-1, pointerEvents:'none',
+                   background:`radial-gradient(ellipse 100% 60% at 50% 0%, ${tone}28 0%, transparent 60%)`}}/>
+
+      {/* Back button */}
+      <div style={{padding:'28px var(--gutter) 0'}}>
+        <button onClick={() => window.navigate('home')}
+          style={{display:'inline-flex', alignItems:'center', gap:8,
+                  background:'none', border:'none', color:'rgba(255,255,255,.55)',
+                  fontSize:14, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
+                  padding:'6px 0', letterSpacing:'.02em'}}>
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="m15 6-6 6 6 6"/>
+          </svg>
+          Sports
+        </button>
+      </div>
+
+      <div style={{maxWidth:960, margin:'0 auto', padding:'48px var(--gutter) 0'}}>
+        {/* League + status */}
+        <div style={{display:'flex', alignItems:'center', gap:12, marginBottom:32}}>
+          <LeagueBadge league={game.league}/>
+          {isLive
+            ? <span style={{fontSize:11, fontWeight:800, letterSpacing:'.1em', textTransform:'uppercase',
+                             color:'#ff4848', background:'rgba(255,50,50,.14)',
+                             border:'1px solid rgba(255,50,50,.28)', borderRadius:5,
+                             padding:'3px 8px', animation:'sport-pulse 2s ease-in-out infinite'}}>
+                ● LIVE
+              </span>
+            : game._timeLabel &&
+              <span style={{fontSize:13, color:'rgba(255,255,255,.4)', fontWeight:500}}>
+                {game._timeLabel}
+              </span>}
+        </div>
+
+        {/* Matchup */}
+        <div style={{display:'flex', alignItems:'center', justifyContent:'center',
+                     gap:'clamp(24px, 6vw, 80px)', marginBottom:48}}>
+          <TeamBlock logo={game.away_logo} name={game.away_team} abbrev={game.away_team_abbrev}/>
+          <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:12, flexShrink:0}}>
+            {isLive && game.score
+              ? <div style={{fontSize:'clamp(40px, 7vw, 72px)', fontWeight:900,
+                              letterSpacing:'-.04em', lineHeight:1, textShadow:'0 4px 24px rgba(0,0,0,.4)'}}>
+                  {game.score}
+                </div>
+              : <div style={{fontSize:'clamp(28px, 5vw, 52px)', fontWeight:800,
+                              color:'rgba(255,255,255,.18)'}}>VS</div>}
+            {isLive &&
+              <div style={{fontSize:12, color:'rgba(255,255,255,.4)', fontWeight:500}}>
+                {game.status || ''}
+              </div>}
+          </div>
+          <TeamBlock logo={game.home_logo} name={game.home_team} abbrev={game.home_team_abbrev}/>
+        </div>
+
+        {/* Play button */}
+        <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:14}}>
+          {game.stream_url
+            ? <button onClick={watchGame}
+                style={{display:'inline-flex', alignItems:'center', gap:10,
+                        background:'#fff', color:'#000',
+                        border:'none', borderRadius:99, cursor:'pointer',
+                        fontFamily:'inherit', fontSize:16, fontWeight:700,
+                        padding:'16px 40px', letterSpacing:'.02em',
+                        boxShadow:`0 0 32px ${tone}55`}}>
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                  <path d="M8 5v14l11-7z"/>
+                </svg>
+                {isLive ? 'Watch Live' : 'Watch'}
+              </button>
+            : <div style={{display:'flex', flexDirection:'column', alignItems:'center', gap:12}}>
+                {game.broadcast &&
+                  <div style={{fontSize:13, color:'rgba(255,255,255,.45)', fontWeight:500,
+                                display:'flex', alignItems:'center', gap:6}}>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 6l11 7 11-7"/><rect x="1" y="6" width="22" height="13" rx="2"/></svg>
+                    On {game.broadcast}
+                  </div>}
+                <a href={`https://www.espn.com/nba/game/_/gameId/${game.espn_id || game.id}`}
+                   target="_blank" rel="noopener noreferrer"
+                   style={{display:'inline-flex', alignItems:'center', gap:8,
+                           background:'rgba(255,255,255,.08)', color:'rgba(255,255,255,.7)',
+                           border:'1px solid rgba(255,255,255,.15)', borderRadius:99, cursor:'pointer',
+                           fontFamily:'inherit', fontSize:14, fontWeight:600,
+                           padding:'12px 28px', letterSpacing:'.02em', textDecoration:'none'}}>
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                  Watch on ESPN
+                </a>
+              </div>}
+          {streamError &&
+            <div style={{fontSize:13, color:'rgba(255,100,100,.7)'}}>{streamError}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Export to global scope
+Object.assign(window, {
+  SearchPage,
+  LibraryPage,
+  HistoryPage,
+  GenreRow,
+  LazyGenreRow,
+  GenrePage,
+  SportsPage,
+  SportDetailPage,
+  GENRE_CFG,
+});
+/* components.jsx — HALO Media Server UI */
+
+/* ── Icons ──────────────────────────────────────────────────────────────── */
+const Icon = {
+  play:   <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>,
+  search: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.2-3.2"/></svg>,
+  bell:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>,
+  plus:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 5v14M5 12h14"/></svg>,
+  info:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>,
+  bolt:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M13 2 4 14h7l-1 8 9-12h-7l1-8z"/></svg>,
+  left:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="m15 5-7 7 7 7"/></svg>,
+  right:  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="m9 5 7 7-7 7"/></svg>,
+  home:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>,
+  lib:    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="6" height="16" rx="1"/><rect x="11" y="4" width="6" height="16" rx="1"/><path d="M20 5l1.5 14"/></svg>,
+  user:   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></svg>,
+};
+
+
+/* ── Cursor-following sheen ──────────────────────────────────────────────── */
+function useSheen() {
+  const ref = useRef(null);
+  const onMove = useCallback((e) => {
+    const el = ref.current; if (!el) return;
+    const r = el.getBoundingClientRect();
+    el.style.setProperty('--mx', ((e.clientX - r.left) / r.width * 100) + '%');
+    el.style.setProperty('--my', ((e.clientY - r.top) / r.height * 100) + '%');
+  }, []);
+  return { ref, onMouseMove: onMove };
+}
+
+
+/* ── Landscape card (16/10 style) ────────────────────────────────────────── */
+function LandscapeCard({ item, onOpen }) {
+  const s = useSheen();
+  const bdSrc = backdropUrl(item) || landscapeUrl(item);
+  const hasBd = !!bdSrc;
+  return (
+    <div className="card card--land" style={{'--cardglow': item.tone}}
+         ref={s.ref} onMouseMove={s.onMouseMove} onClick={() => onOpen && onOpen(item)}>
+      <div className="card__inner">
+        {hasBd
+          ? <img className="art" loading="lazy" decoding="async" src={bdSrc} alt={item.title} draggable="false"/>
+          : <React.Fragment>
+              <div className="blurfill" style={{backgroundImage: `url(${posterUrl(item)})`}}></div>
+              <div className="duotone"></div>
+            </React.Fragment>}
+        <div className="botgrad"></div>
+        <div className="card__sheen"></div>
+        <div className="card__gloss"></div>
+        <div className="card__label">
+          <div className="t">{item.title}</div>
+          <div className="s">
+            <span>{item.year}</span>
+            <span className="dot"></span>
+            <span>{(item.genre || '').split(' · ')[0]}</span>
+          </div>
+        </div>
+      </div>
+      <div className="card__glow"></div>
+    </div>
+  );
+}
+
+/* ── Continue watching card ──────────────────────────────────────────────── */
+function ContinueCard({ item, onOpen }) {
+  const s = useSheen();
+  const art = backdropUrl(item) || posterUrl(item);
+  /* progress from API is 0–1 (fraction); convert to 0–100 for display */
+  const pct = Math.min(100, Math.round((item.progress || 0) * 100));
+  const left = item.timeLeft || '';
+  const epLabel = !item.isMovie && item.season > 0 ? `S${item.season} E${item.episode}` : null;
+  return (
+    <div className="card card--land card--cont" style={{'--cardglow': item.tone}}
+         ref={s.ref} onMouseMove={s.onMouseMove} onClick={() => onOpen && onOpen(item)}>
+      <div className="card__inner">
+        <img className="art" loading="lazy" decoding="async" src={art} alt={item.title} draggable="false"/>
+        <div className="botgrad"></div>
+        <div className="card__sheen"></div>
+        <div className="card__gloss"></div>
+        <div className="playover"><span>{Icon.play}</span></div>
+        <div className="card__label">
+          <div className="t">{item.title}</div>
+          <div className="s">
+            {epLabel && <React.Fragment><span>{epLabel}</span><span className="dot"></span></React.Fragment>}
+            <span>{pct}% watched</span>
+            {left && <React.Fragment><span className="dot"></span><span>{left}</span></React.Fragment>}
+          </div>
+        </div>
+        <div className="prog"><i style={{width: pct + '%'}}></i></div>
+      </div>
+      <div className="card__glow"></div>
+    </div>
+  );
+}
+
+/* ── Sport card ──────────────────────────────────────────────────────────── */
+const LEAGUE_ICONS_MAP = { nba: '🏀', nfl: '🏈', boxing: '🥊' };
+
+function SportTeam({ logo, abbrev, league }) {
+  const [err, setErr] = useState(false);
+  return (
+    <div className="sport-team">
+      {logo && !err
+        ? <img className="sport-logo" src={logo} alt={abbrev} onError={() => setErr(true)}/>
+        : <div className="sport-logo-fb">{LEAGUE_ICONS_MAP[league] || '🏆'}</div>}
+      <span className="sport-abbrev">{abbrev || 'TBD'}</span>
+    </div>
+  );
+}
+
+function SportCard({ item, onOpen }) {
+  const s = useSheen();
+  const isLive = item.status_state === 'in';
+  return (
+    <div className="card card--land card--sport" style={{'--cardglow': item.tone || '#444'}}
+         ref={s.ref} onMouseMove={s.onMouseMove} onClick={() => onOpen && onOpen(item)}>
+      <div className="card__inner">
+        <div className="sport-bg"/>
+        <div className="sport-teams">
+          <SportTeam logo={item.away_logo} abbrev={item.away_team_abbrev || item.away_team} league={item.league}/>
+          <div className="sport-mid">
+            {isLive && item.score
+              ? <span className="sport-score">{item.score}</span>
+              : <span className="sport-vs">VS</span>}
+          </div>
+          <SportTeam logo={item.home_logo} abbrev={item.home_team_abbrev || item.home_team} league={item.league}/>
+        </div>
+        <div className="sport-foot">
+          {isLive
+            ? <span className="sport-live">● LIVE</span>
+            : <span className="sport-time">{item._timeLabel || ''}</span>}
+          <span className="sport-status-text">
+            {isLive ? (item.status || '') : (item.league || '').toUpperCase()}
+          </span>
+        </div>
+        <div className="card__sheen"/>
+        <div className="card__gloss"/>
+      </div>
+      <div className="card__glow"/>
+    </div>
+  );
+}
+
+/* ── Crossfading hero background ─────────────────────────────────────────── */
+function HeroBg({ src }) {
+  const [layers, setLayers] = useState([{src, on: true}, {src: null, on: false}]);
+  const top = useRef(0);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    setLayers(prev => {
+      const other = top.current ^ 1;
+      const next = [...prev];
+      next[other] = {src, on: true};
+      next[top.current] = {...next[top.current], on: false};
+      top.current = other;
+      return next;
+    });
+  }, [src]);
+  return (
+    <div className="stage__bg">
+      {layers.map((l, i) => l.src
+        ? <img key={i} className={l.on ? 'is-active' : ''} src={l.src} alt="" draggable="false"/>
+        : <span key={i}></span>)}
+    </div>
+  );
+}
+
+/* ── Hero banner ─────────────────────────────────────────────────────────── */
+function Hero({ hero, heroList, heroIdx, setHeroIdx, nav, paused, setPaused }) {
+  const [inList, setInList] = useState(false);
+
+  useEffect(() => {
+    if (!hero) return;
+    const [heroType, heroId] = hero.id.split('_');
+    const pid = window.currentProfileId || 1;
+    fetch(`${window.API_BASE_URL}/list/check/${heroType}/${heroId}?profile_id=${pid}`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setInList(d.in_list); })
+      .catch(() => {});
+  }, [hero?.id]);
+
+  if (!hero) return null;
+  const [heroType, heroId] = hero.id.split('_');
+  const heroSrc = hero.backdrop_large || hero.backdrop || backdropUrl(hero) || posterUrl(hero);
+
+  function goToDetail() { window.navigate(`detail/${heroType}/${heroId}`); }
+
+  async function toggleList(e) {
+    e.stopPropagation();
+    const pid = window.currentProfileId || 1;
+    try {
+      if (inList) {
+        await fetch(`${window.API_BASE_URL}/list/remove/${heroType}/${heroId}?profile_id=${pid}`, { method: 'DELETE' });
+        setInList(false);
+      } else {
+        await fetch(`${window.API_BASE_URL}/list/add`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile_id: pid, media_id: heroId, media_type: heroType,
+            title: hero.title, poster: hero.poster || '', backdrop: hero.backdrop || '', tone: hero.tone || '#5BB7FF' })
+        });
+        setInList(true);
+      }
+      window.clearCacheEntry?.(`/list?profile_id=${pid}`);
+    } catch (_) {}
+  }
+
+  const match = hero._match || Math.min(99, Math.round((hero.vote_average || 7.5) * 10));
+  const rating = hero.rating || hero.rated || 'PG-13';
+  const genre = hero.genre || '';
+  const rank = hero._rank || '#1 in Trending';
+  const tagline = hero.tagline || hero.synopsis || hero.overview || '';
+  const kindLabel = hero.kind === 'series' ? 'Series' : hero.kind === 'anime' ? 'Anime' : 'Film';
+
+  const checkIcon = <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M5 13l4 4L19 7"/></svg>;
+
+  return (
+    <div className="stage">
+      <HeroBg src={heroSrc}/>
+      <div className="stage__scrim"></div>
+
+      {nav}
+
+      <div className="hero" key={hero.id}>
+        <div className="hero__kicker">
+          <span><b>{genre.split(' · ')[0]}</b> · {kindLabel}</span>
+        </div>
+        <h1 className="hero__title">{hero.title}</h1>
+        <div className="hero__meta">
+          <span className="match">{match}% Match</span>
+          <span>{hero.year}</span>
+          {rating && <span className="pill">{rating}</span>}
+          <span>{genre}</span>
+        </div>
+        <div className="hero__rank">{Icon.bolt}<span>{rank}</span></div>
+        <p className="hero__desc">{tagline}</p>
+        <div className="hero__actions">
+          <button className="btn-play" onClick={goToDetail}>{Icon.play}<span>Play</span></button>
+          <button className="btn-ghost" onClick={toggleList}>
+            {inList ? checkIcon : Icon.plus}
+            <span>{inList ? 'In List' : 'My List'}</span>
+          </button>
+          <button className="btn-ghost" onClick={goToDetail}>{Icon.info}<span>Info</span></button>
+        </div>
+        <div className="hero__dots">
+          {heroList.map((_, i) => (
+            <button key={i} className={i === heroIdx ? 'active' : ''}
+              onClick={() => { setPaused(true); setHeroIdx(i); setTimeout(() => setPaused(false), 6000); }}
+              aria-label={'Feature ' + (i + 1)}></button>
+          ))}
+        </div>
+      </div>
+
+      <div className="stage__glow"><b></b></div>
+    </div>
+  );
+}
+
+/* ── Desktop top nav ─────────────────────────────────────────────────────── */
+const TABS = [
+  { id: 'home',   label: 'Home' },
+  { id: 'movies', label: 'Movies' },
+  { id: 'series', label: 'TV Shows' },
+  { id: 'anime',  label: 'Anime' },
+  { id: 'kids',   label: 'Kids' },
+  { id: 'sports', label: 'Sports' },
+];
+
+const TAB_GENRES = {
+  movies: { type: 'movies', genres: ['Action','Sci-Fi','Horror','Comedy','Drama','Thriller','Adventure','Fantasy'] },
+  series: { type: 'tv',     genres: ['Action & Adventure','Drama','Crime','Mystery','Comedy','Sci-Fi & Fantasy','Documentary','Animation'] },
+  kids:   { type: 'kids',   genres: ['Family','Animation','Adventure','Comedy','Fantasy'] },
+  anime:  { type: 'anime',  genres: ['Action','Fantasy','Sci-Fi','Comedy','Drama','Mystery','Horror','Romance'] },
+};
+
+const GENRE_GRADIENTS = {
+  'Action':             'linear-gradient(160deg,#7b1c1c,#3a0a0a)',
+  'Sci-Fi':             'linear-gradient(160deg,#0d3b7a,#050e2e)',
+  'Horror':             'linear-gradient(160deg,#2e0030,#060006)',
+  'Comedy':             'linear-gradient(160deg,#b34700,#5a1e00)',
+  'Drama':              'linear-gradient(160deg,#005748,#001a15)',
+  'Thriller':           'linear-gradient(160deg,#3a0060,#0d0018)',
+  'Adventure':          'linear-gradient(160deg,#1a5c20,#031208)',
+  'Fantasy':            'linear-gradient(160deg,#5c1080,#160024)',
+  'Action & Adventure': 'linear-gradient(160deg,#8b1a00,#4a3000)',
+  'Sci-Fi & Fantasy':   'linear-gradient(160deg,#0d3b7a,#5c1080)',
+  'Mystery':            'linear-gradient(160deg,#1a2535,#060c15)',
+  'Crime':              'linear-gradient(160deg,#5c0e0e,#1a0000)',
+  'Documentary':        'linear-gradient(160deg,#1a4d28,#041208)',
+  'Animation':          'linear-gradient(160deg,#0d4280,#1a0050)',
+  'Family':             'linear-gradient(160deg,#8b4a00,#4a2000)',
+  'Romance':            'linear-gradient(160deg,#7a0040,#2e0015)',
+  'War & Politics':     'linear-gradient(160deg,#2e2010,#0d0800)',
+};
+
+function GenreCatCard({ genre, mediaType, backdrop, isActive, onClick }) {
+  const grad = GENRE_GRADIENTS[genre] || 'linear-gradient(160deg,#1a1a2e,#060610)';
+  return (
+    <button
+      className={'genre-cat-card' + (isActive ? ' is-active' : '')}
+      style={{ background: grad }}
+      onClick={onClick}
+      aria-pressed={isActive}
+    >
+      {backdrop && (
+        <img className="genre-cat-card__bg" src={backdrop} alt="" loading="lazy" draggable="false"/>
+      )}
+      <div className="genre-cat-card__overlay"/>
+      <span className="genre-cat-card__name">{genre}</span>
+    </button>
+  );
+}
+
+function TopNav({ tab, setTab, sticky }) {
+  return (
+    <div className={'topnav' + (sticky ? ' topnav--sticky' : '')}>
+      <div className="brand">HALO</div>
+      <nav className="nav-tabs">
+        {TABS.map(t => (
+          <button key={t.id} className={t.id === tab ? 'active' : ''}
+            onClick={() => setTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </nav>
+      <div className="nav-right">
+        <button className="icon-btn" aria-label="search"
+          onClick={() => window.navigate('search')}>{Icon.search}</button>
+        <button className="icon-btn" aria-label="alerts">{Icon.bell}</button>
+        <div className="avatar avatar--gen"
+          onClick={() => window.showProfilePicker?.()}
+          style={{cursor:'pointer'}}>
+          {window.currentProfile?.avatar || '🎬'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Mobile top header (logo + category chips) ───────────────────────────── */
+function MobileTop({ tab, setTab }) {
+  return (
+    <React.Fragment>
+      <div className="mtop">
+        <div className="brand">HALO</div>
+      </div>
+      <div className="mchips">
+        {TABS.map(t => (
+          <button key={t.id} className={t.id === tab ? 'active' : ''} onClick={() => setTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+    </React.Fragment>
+  );
+}
+
+/* ── Mobile bottom bar ───────────────────────────────────────────────────── */
+function BottomBar({ active, onNav }) {
+  const items = [
+    ['home',    'Home',    Icon.home],
+    ['search',  'Search',  Icon.search],
+    ['library', 'Library', Icon.lib],
+    ['account', 'Account', Icon.user],
+  ];
+  return (
+    <nav className="bottombar">
+      {items.map(([id, label, ic]) => (
+        <button key={id} className={active === id ? 'active' : ''} onClick={() => onNav(id)}>
+          {ic}<span>{label}</span>
+        </button>
+      ))}
+    </nav>
+  );
+}
+
+/* ── Horizontal scrolling row ────────────────────────────────────────────── */
+function Row({ row, onOpen, onSeeAll }) {
+  const trackRef = useRef(null);
+  const [edge, setEdge] = useState({l: true, r: false});
+
+  const update = useCallback(() => {
+    const t = trackRef.current; if (!t) return;
+    setEdge({l: t.scrollLeft < 8, r: t.scrollLeft + t.clientWidth >= t.scrollWidth - 8});
+  }, []);
+
+  useEffect(() => { update(); }, [row, update]);
+
+  function nudge(dir) {
+    const t = trackRef.current; if (!t) return;
+    t.scrollBy({left: dir * Math.min(t.clientWidth * 0.82, 760), behavior: 'smooth'});
+  }
+
+  const isTop10 = row.layout === 'top10';
+  const CardComp = row.layout === 'portrait' ? PortraitCard
+    : row.layout === 'continue' ? ContinueCard
+    : row.layout === 'sport' ? SportCard
+    : LandscapeCard;
+
+  return (
+    <section className={'row' + (isTop10 ? ' row--top10' : '')}>
+      <div className="row__head">
+        <h2 className="row__title">{row.label}</h2>
+        <button className="row__all" onClick={() => {
+          if (onSeeAll) { onSeeAll(); return; }
+          const map = {mv:'movies', tv:'tv', an:'anime', tr:'trending', rec:'recommended'};
+          if (map[row.id]) window.navigate(map[row.id]);
+        }}>{row.seeAllLabel || 'See all'}</button>
+      </div>
+      <div className="row__scroller">
+        <button className="rail-arrow left" disabled={edge.l} onClick={() => nudge(-1)} aria-label="scroll left">{Icon.left}</button>
+        <div className="track" ref={trackRef} onScroll={update}>
+          {(row.items || []).map((it, i) => {
+            const item = typeof it === 'string' ? ITEMS[it] : it;
+            if (!item) return null;
+            if (isTop10) return <Top10Card key={(item.id || i)} item={item} rank={i + 1} onOpen={onOpen}/>;
+            return <CardComp key={(item.id || i)} item={item} onOpen={onOpen}/>;
+          })}
+        </div>
+        <button className="rail-arrow right" disabled={edge.r} onClick={() => nudge(1)} aria-label="scroll right">{Icon.right}</button>
+      </div>
+    </section>
+  );
+}
+
+/* ── Page spinner ────────────────────────────────────────────────────────── */
+function PageSpinner({ label }) {
+  return (
+    <div className="page-spinner">
+      <svg className="page-spinner__ring" viewBox="0 0 44 44" fill="none">
+        <circle cx="22" cy="22" r="18" stroke="rgba(255,255,255,.12)" strokeWidth="3"/>
+        <circle cx="22" cy="22" r="18" stroke="rgba(255,255,255,.7)" strokeWidth="3"
+          strokeLinecap="round" strokeDasharray="28 85"
+          style={{animation:'page-spin 1s linear infinite', transformOrigin:'center'}}/>
+      </svg>
+      {label && <div className="page-spinner__label">{label}</div>}
+    </div>
+  );
+}
+
+/* ── Ambient background (keep for tweaks compatibility) ──────────────────── */
+function AmbientBg({ variant, accentColor, intensity = 1 }) {
+  if (variant === 'obsidian') {
+    return (
+      <div className="ambient ambient--obsidian" aria-hidden="true"
+        style={{'--accent': accentColor, '--amb-intensity': intensity}}>
+        <div className="amb-grid"></div>
+        <div className="amb-blob amb-blob--accent"></div>
+        <div className="amb-noise"></div>
+      </div>
+    );
+  }
+  return (
+    <div className="ambient ambient--aurora" aria-hidden="true"
+      style={{'--accent': accentColor, '--amb-intensity': intensity}}>
+      <div className="amb-blob amb-blob--1"></div>
+      <div className="amb-blob amb-blob--2"></div>
+      <div className="amb-blob amb-blob--accent"></div>
+      <div className="amb-noise"></div>
+    </div>
+  );
+}
+
+/* ── Breakpoint hook ─────────────────────────────────────────────────────── */
+function useViewport() {
+  const [vp, setVp] = useState(() => ({w: window.innerWidth, h: window.innerHeight}));
+  useEffect(() => {
+    const onR = () => setVp({w: window.innerWidth, h: window.innerHeight});
+    window.addEventListener('resize', onR);
+    return () => window.removeEventListener('resize', onR);
+  }, []);
+  return vp;
+}
+
+function useBreakpoint() {
+  const { w } = useViewport();
+  if (w < 560) return 'phone';
+  if (w < 900) return 'tablet';
+  if (w < 1400) return 'laptop';
+  if (w < 2200) return 'desktop';
+  return 'tv';
+}
+
+/* ── Top 10 card ─────────────────────────────────────────────────────────── */
+function Top10Card({ item, rank, onOpen }) {
+  const s = useSheen();
+  const src = posterUrl(item);
+  return (
+    <div className="card card--top10" style={{'--cardglow': item.tone}}
+         ref={s.ref} onMouseMove={s.onMouseMove} onClick={() => onOpen && onOpen(item)}>
+      <div className="top10-num">{rank}</div>
+      <div className="card__inner">
+        <img className="art" loading="lazy" decoding="async" src={src} alt={item.title} draggable="false"/>
+        <div className="card__sheen"></div>
+        <div className="card__gloss"></div>
+      </div>
+      <div className="card__glow"></div>
+    </div>
+  );
+}
+
+/* ── Detect non-touch desktop for trailer / download badge ───────────────── */
+const _IS_TOUCH = ('ontouchstart' in window) ||
+  (/iPad|iPhone|iPod|Android/.test(navigator.userAgent)) ||
+  (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+/* ── Portrait card with trailer hover (desktop) + download badge ─────────── */
+function PortraitCard({ item, onOpen }) {
+  const s = useSheen();
+  const src = posterUrl(item);
+  const [trailerKey, setTrailerKey] = useState(null);
+  const [showTrailer, setShowTrailer] = useState(false);
+  const hoverTimer = useRef(null);
+  const itemRef = useRef(item);
+  itemRef.current = item;
+
+  function onEnter() {
+    if (_IS_TOUCH) return;
+    hoverTimer.current = setTimeout(() => {
+      const cur = itemRef.current;
+      const [type, id] = cur.id.split('_');
+      fetch(`${window.API_BASE_URL}/trailer/${type}/${id}`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.key && itemRef.current.id === cur.id) {
+            setTrailerKey(d.key);
+            setShowTrailer(true);
+          }
+        })
+        .catch(() => {});
+    }, 2000);
+  }
+
+  function onLeave() {
+    clearTimeout(hoverTimer.current);
+    setShowTrailer(false);
+    setTrailerKey(null);
+  }
+
+  const [, _forceCache] = useState(0);
+  useEffect(() => {
+    const handler = () => _forceCache(n => n + 1);
+    window.addEventListener('cachedset-ready', handler);
+    return () => window.removeEventListener('cachedset-ready', handler);
+  }, []);
+  const isCached = window.cachedSet?.has(item.id);
+
+  return (
+    <div className="card card--portrait" style={{'--cardglow': item.tone}}
+         ref={s.ref} onMouseMove={s.onMouseMove}
+         onMouseEnter={onEnter} onMouseLeave={onLeave}
+         onClick={() => onOpen && onOpen(item)}>
+      <div className="card__inner">
+        <img className="art" loading="lazy" decoding="async" src={src} alt={item.title} draggable="false"
+             style={src ? null : {background: item.tone}}/>
+        {showTrailer && trailerKey && (
+          <div className="trailer-overlay">
+            <iframe
+              src={`https://www.youtube.com/embed/${trailerKey}?autoplay=1&mute=1&controls=0&loop=1&playlist=${trailerKey}&modestbranding=1`}
+              allow="autoplay; encrypted-media" allowFullScreen frameBorder="0"
+              style={{width:'100%',height:'100%',border:'none'}}/>
+          </div>
+        )}
+        {isCached && <div className="dl-badge" title="Downloaded">↓</div>}
+        <div className="card__sheen"></div>
+        <div className="card__gloss"></div>
+      </div>
+      <div className="card__glow"></div>
+    </div>
+  );
+}
+
+
+/* ── Exports ─────────────────────────────────────────────────────────────── */
+Object.assign(window, {
+  Icon, useSheen,
+  PortraitCard, LandscapeCard, ContinueCard, CategoryCard,
+  Top10Card,
+  SportTeam, SportCard, LEAGUE_ICONS_MAP,
+  HeroBg, Hero,
+  TopNav, MobileTop, BottomBar, TABS, TAB_GENRES, GENRE_GRADIENTS, GenreCatCard,
+  Row,
+  PageSpinner, AmbientBg,
+  useBreakpoint, useViewport,
+});
+/* app.jsx — HALO Media Server */
+
+/* ── Splash screen ───────────────────────────────────────────────────────── */
+function SplashScreen() {
+  const [phase, setPhase] = React.useState('enter');
+  React.useEffect(() => {
+    const t = setTimeout(() => setPhase('hold'), 50);
+    return () => clearTimeout(t);
+  }, []);
+  return (
+    <div className={'splash splash--' + phase}>
+      <div className="splash__logo">HALO</div>
+      <div className="splash__tagline">Your personal universe of content</div>
+      <div className="splash__bar"><div className="splash__bar-fill"/></div>
+    </div>
+  );
+}
+
+/* ── Profile Picker ──────────────────────────────────────────────────────── */
+function ProfilePicker({ onSelect, onClose }) {
+  const [profiles, setProfiles]   = React.useState([]);
+  const [mode, setMode]           = React.useState('pick');
+  const [editing, setEditing]     = React.useState(null);
+  const [formName, setFormName]   = React.useState('');
+  const [formAvatar, setFormAvatar] = React.useState('🦊');
+  const [confirmDelete, setConfirmDelete] = React.useState(false);
+  const [hoveredId, setHoveredId] = React.useState(null);
+  // PIN lock state
+  const [pinTarget, setPinTarget]   = React.useState(null);  // profile awaiting PIN
+  const [pinInput, setPinInput]     = React.useState('');
+  const [pinError, setPinError]     = React.useState(false);
+  const [pinSetting, setPinSetting] = React.useState('');    // for set-pin form in edit mode
+
+  const AVATARS = ['🦊','🐱','🐶','🐸','🦁','🐼','🐧','🦄','🎬','🎮','🎵','⭐','🌙','🌸','🔥','💫'];
+
+  React.useEffect(() => { loadProfiles(); }, []);
+
+  async function loadProfiles() {
+    try {
+      const r = await fetch(`${window.API_BASE_URL}/profiles`);
+      const d = await r.json();
+      if (d.success) setProfiles(d.data);
+    } catch (_) {}
+  }
+
+  async function createProfile() {
+    if (!formName.trim()) return;
+    try {
+      const r = await fetch(`${window.API_BASE_URL}/profiles`, {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: formName.trim(), avatar: formAvatar})
+      });
+      const d = await r.json();
+      if (d.success) { resetForm(); loadProfiles(); }
+    } catch (_) {}
+  }
+
+  async function saveEdit() {
+    if (!formName.trim() || !editing) return;
+    try {
+      const r = await fetch(`${window.API_BASE_URL}/profiles/${editing.id}`, {
+        method: 'PUT', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({name: formName.trim(), avatar: formAvatar})
+      });
+      const d = await r.json();
+      if (d.success) {
+        if (window.currentProfileId === editing.id) window.currentProfile = d.data;
+        resetForm(); loadProfiles();
+      }
+    } catch (_) {}
+  }
+
+  async function deleteProfile() {
+    if (!editing) return;
+    try {
+      const r = await fetch(`${window.API_BASE_URL}/profiles/${editing.id}`, {method: 'DELETE'});
+      const d = await r.json();
+      if (d.success) {
+        if (window.currentProfileId === editing.id) {
+          localStorage.removeItem('currentProfileId');
+          window.currentProfile = null; window.currentProfileId = null;
+        }
+        resetForm(); loadProfiles();
+      }
+    } catch (_) {}
+  }
+
+  function openEdit(p, e) {
+    e.stopPropagation();
+    setEditing(p); setFormName(p.name); setFormAvatar(p.avatar);
+    setConfirmDelete(false); setMode('edit');
+  }
+
+  function resetForm() {
+    setMode('pick'); setEditing(null); setFormName(''); setFormAvatar('🦊');
+    setConfirmDelete(false); setPinSetting('');
+  }
+
+  async function selectProfile(profile) {
+    const r = await fetch(`${window.API_BASE_URL}/profiles/${profile.id}/verify-pin`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pin: ''})
+    });
+    const d = await r.json().catch(() => ({verified: true, has_pin: false}));
+    if (d.has_pin) {
+      setPinTarget(profile); setPinInput(''); setPinError(false);
+    } else {
+      _doSelectProfile(profile);
+    }
+  }
+
+  function _doSelectProfile(profile) {
+    localStorage.setItem('currentProfileId', String(profile.id));
+    window.currentProfile = profile; window.currentProfileId = profile.id;
+    onSelect(profile);
+  }
+
+  async function submitPin() {
+    if (!pinTarget || !pinInput) return;
+    const r = await fetch(`${window.API_BASE_URL}/profiles/${pinTarget.id}/verify-pin`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pin: pinInput})
+    });
+    const d = await r.json().catch(() => ({verified: false}));
+    if (d.verified) { _doSelectProfile(pinTarget); setPinTarget(null); }
+    else { setPinError(true); setPinInput(''); }
+  }
+
+  async function savePinFromEdit() {
+    if (!editing) return;
+    await fetch(`${window.API_BASE_URL}/profiles/${editing.id}/pin`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({pin: pinSetting})
+    });
+    setPinSetting('');
+  }
+
+  const S = {
+    wrap: {position:'fixed',inset:0,background:'rgba(6,8,12,0.97)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'32px 16px'},
+    card: (hov) => ({background:hov?'rgba(255,255,255,.07)':'rgba(255,255,255,.03)',border:'1px solid rgba(255,255,255,.08)',borderRadius:'16px',padding:'28px 20px',cursor:'pointer',display:'flex',flexDirection:'column',alignItems:'center',gap:'12px',width:'130px',minHeight:'130px',transition:'background .15s, transform .15s',transform:hov?'translateY(-4px)':'none',color:'#fff',position:'relative'}),
+    input: {width:'100%',padding:'12px 16px',background:'rgba(255,255,255,.07)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'10px',color:'#fff',fontSize:'16px',fontFamily:'inherit',outline:'none'},
+    btnPrimary: {padding:'10px 28px',background:'#5BB7FF',color:'#06080c',border:'none',borderRadius:'8px',fontSize:'14px',fontWeight:600,cursor:'pointer',fontFamily:'inherit'},
+    btnGlass: {padding:'10px 28px',background:'rgba(255,255,255,.08)',color:'#fff',border:'1px solid rgba(255,255,255,.14)',borderRadius:'8px',fontSize:'14px',cursor:'pointer',fontFamily:'inherit'},
+    btnDanger: {padding:'10px 28px',background:'rgba(220,50,50,.15)',color:'#ff6b6b',border:'1px solid rgba(220,50,50,.3)',borderRadius:'8px',fontSize:'14px',cursor:'pointer',fontFamily:'inherit'},
+  };
+
+  const avatarGrid = (
+    <div style={{display:'flex',flexWrap:'wrap',gap:'10px',justifyContent:'center'}}>
+      {AVATARS.map(a => (
+        <button key={a} onClick={() => setFormAvatar(a)}
+          style={{fontSize:'28px',cursor:'pointer',background:'none',border:'none',padding:'6px',borderRadius:'8px',lineHeight:1,outline:formAvatar===a?'2px solid #5BB7FF':'none'}}>
+          {a}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (mode === 'add') return (
+    <div style={S.wrap}>
+      <h1 style={{fontSize:'26px',fontWeight:600,marginBottom:'32px',color:'#fff'}}>Create Profile</h1>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'20px',width:'100%',maxWidth:'360px'}}>
+        <input autoFocus value={formName} onChange={e=>setFormName(e.target.value)}
+          onKeyDown={e=>e.key==='Enter'&&createProfile()} placeholder="Name" style={S.input}/>
+        {avatarGrid}
+        <div style={{display:'flex',gap:'10px'}}>
+          <button onClick={createProfile} style={S.btnPrimary}>Create</button>
+          <button onClick={resetForm} style={S.btnGlass}>Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (mode === 'edit' && editing) return (
+    <div style={S.wrap}>
+      <h1 style={{fontSize:'26px',fontWeight:600,marginBottom:'32px',color:'#fff'}}>Edit Profile</h1>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'20px',width:'100%',maxWidth:'360px'}}>
+        <span style={{fontSize:'56px',lineHeight:1}}>{formAvatar}</span>
+        <input autoFocus value={formName} onChange={e=>setFormName(e.target.value)}
+          onKeyDown={e=>e.key==='Enter'&&saveEdit()} placeholder="Name" style={S.input}/>
+        {avatarGrid}
+        <div style={{display:'flex',gap:'10px'}}>
+          <button onClick={saveEdit} style={S.btnPrimary}>Save</button>
+          <button onClick={resetForm} style={S.btnGlass}>Cancel</button>
+        </div>
+        <div style={{width:'100%',borderTop:'1px solid rgba(255,255,255,.08)',paddingTop:'16px'}}>
+          <p style={{color:'rgba(255,255,255,.4)',fontSize:'12px',margin:'0 0 8px',textAlign:'center'}}>
+            Profile PIN (leave blank to remove)
+          </p>
+          <div style={{display:'flex',gap:'8px'}}>
+            <input type="password" inputMode="numeric" maxLength={8}
+              value={pinSetting} onChange={e=>setPinSetting(e.target.value)}
+              placeholder="New PIN" style={{...S.input,flex:1,textAlign:'center'}}/>
+            <button onClick={savePinFromEdit} style={S.btnGlass}>Set</button>
+          </div>
+        </div>
+        {profiles.length > 1 && (
+          <div style={{marginTop:'8px',width:'100%',textAlign:'center'}}>
+            {confirmDelete
+              ? <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'10px'}}>
+                  <p style={{color:'#ff6b6b',fontSize:'13px',margin:0}}>Delete "{editing.name}"? This removes all watch history for this profile.</p>
+                  <div style={{display:'flex',gap:'10px'}}>
+                    <button onClick={deleteProfile} style={S.btnDanger}>Yes, Delete</button>
+                    <button onClick={()=>setConfirmDelete(false)} style={S.btnGlass}>Keep It</button>
+                  </div>
+                </div>
+              : <button onClick={()=>setConfirmDelete(true)}
+                  style={{background:'none',border:'none',color:'rgba(255,100,100,.6)',fontSize:'13px',cursor:'pointer',fontFamily:'inherit'}}>
+                  Delete profile
+                </button>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (pinTarget) return (
+    <div style={S.wrap}>
+      <span style={{fontSize:'64px',lineHeight:1,marginBottom:'8px'}}>{pinTarget.avatar}</span>
+      <h1 style={{fontSize:'22px',fontWeight:600,marginBottom:'4px',color:'#fff'}}>{pinTarget.name}</h1>
+      <p style={{fontSize:'13px',color:'rgba(255,255,255,.45)',margin:'0 0 28px'}}>Enter PIN to continue</p>
+      <input autoFocus type="password" inputMode="numeric" maxLength={8}
+        value={pinInput} onChange={e=>{setPinInput(e.target.value);setPinError(false);}}
+        onKeyDown={e=>e.key==='Enter'&&submitPin()}
+        placeholder="••••"
+        style={{...S.input, maxWidth:'200px', textAlign:'center', fontSize:'24px', letterSpacing:'.3em'}}/>
+      {pinError && <p style={{color:'#ff6b6b',fontSize:'13px',margin:'8px 0 0'}}>Incorrect PIN</p>}
+      <div style={{display:'flex',gap:'10px',marginTop:'20px'}}>
+        <button onClick={submitPin} style={S.btnPrimary}>Unlock</button>
+        <button onClick={()=>setPinTarget(null)} style={S.btnGlass}>Back</button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={S.wrap}>
+      <h1 style={{fontSize:'28px',fontWeight:600,marginBottom:'40px',color:'#fff',letterSpacing:'-.01em'}}>Who's Watching?</h1>
+      <div style={{display:'flex',flexWrap:'wrap',gap:'16px',justifyContent:'center',maxWidth:'680px',padding:'12px'}}>
+        {profiles.map(p => (
+          <div key={p.id} style={{position:'relative'}}
+            onMouseEnter={()=>setHoveredId(p.id)} onMouseLeave={()=>setHoveredId(null)}>
+            <button style={S.card(hoveredId===p.id)} onClick={()=>selectProfile(p)}>
+              <span style={{fontSize:'52px',lineHeight:1}}>{p.avatar}</span>
+              <span style={{fontSize:'14px',fontWeight:500}}>{p.name}</span>
+            </button>
+            <button className="profile-edit-btn" onClick={e=>openEdit(p,e)} aria-label={`Edit ${p.name}`}
+              style={{position:'absolute',top:'-10px',right:'-10px',width:'34px',height:'34px',borderRadius:'50%',background:'rgba(20,20,28,.88)',border:'1.5px solid rgba(255,255,255,.28)',color:'#fff',display:'grid',placeItems:'center',cursor:'pointer',padding:0,boxShadow:'0 2px 8px rgba(0,0,0,.5)',transition:'transform .15s, background .15s'}}>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+          </div>
+        ))}
+        <button style={S.card(hoveredId==='add')}
+          onMouseEnter={()=>setHoveredId('add')} onMouseLeave={()=>setHoveredId(null)}
+          onClick={()=>{ setFormName(''); setFormAvatar('🦊'); setMode('add'); }}>
+          <span style={{fontSize:'40px',lineHeight:1,color:'rgba(255,255,255,.4)'}}>+</span>
+          <span style={{fontSize:'14px',fontWeight:500,color:'rgba(255,255,255,.5)'}}>Add Profile</span>
+        </button>
+      </div>
+      {onClose && (
+        <button onClick={onClose}
+          style={{marginTop:'40px',background:'none',border:'none',color:'rgba(255,255,255,.35)',fontSize:'13px',cursor:'pointer',fontFamily:'inherit'}}>
+          Continue as {window.currentProfile?.name || 'Guest'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ── Build hero-enriched item ────────────────────────────────────────────── */
+function makeHero(item, i) {
+  const ranks = ['#1 in Trending Today', 'Trending #2', 'Critics\' Pick', '#3 in Movies Today', '#1 in Action'];
+  const matches = [97, 94, 96, 93, 98];
+  return {
+    ...item,
+    _match: matches[i % matches.length],
+    _rank: ranks[i % ranks.length],
+  };
+}
+
+/* ── Row layout + tab config ─────────────────────────────────────────────── */
+const ROW_CONFIG = {
+  tr:     { layout: 'portrait',  tabs: ['home'],                    label: "What's Hot" },
+  top10:  { layout: 'top10',     tabs: ['home'],                    label: 'Top 10 in the US Today' },
+  rec:    { layout: 'portrait',  tabs: ['home'],                    label: 'Recommended For You' },
+  coming: { layout: 'portrait',  tabs: ['home'],                    label: 'Coming Soon' },
+  mv:     { layout: 'landscape', tabs: ['home', 'movies'],          label: 'Popular Movies' },
+  tv:     { layout: 'landscape', tabs: ['home', 'series'],          label: 'TV Shows' },
+  an:     { layout: 'landscape', tabs: ['home', 'anime'],           label: 'Anime' },
+  cont:   { layout: 'continue',  tabs: ['home', 'movies', 'series'],label: 'Continue Watching' },
+};
+
+/* ── Genre rows inline on non-home tabs ─────────────────────────────────── */
+const GENRE_ENDPOINT = {
+  movies: '/movies/genres',
+  series: '/tv/genres',
+  anime:  '/anime/genres',
+  kids:   '/kids/genres',
+};
+const GENRE_MEDIA_TYPE = {
+  movies: 'movies',
+  series: 'tv',
+  anime:  'anime',
+  kids:   'kids',
+};
+
+function GenreTabRows({ tab, onOpen }) {
+  const [genreData, setGenreData] = React.useState(null);
+  const endpoint = GENRE_ENDPOINT[tab];
+
+  React.useEffect(() => {
+    setGenreData(null);
+    if (!endpoint) return;
+    window.fetchWithCache(endpoint)
+      .then(data => setGenreData(data || {}))
+      .catch(() => {});
+  }, [tab]);
+
+  if (!genreData) return null;
+
+  const mediaType = GENRE_MEDIA_TYPE[tab];
+
+  return (
+    <React.Fragment>
+      {Object.entries(genreData).map(([genreName, items]) =>
+        items.length > 0 ? (
+          <LazyGenreRow
+            key={genreName}
+            genreName={genreName}
+            items={items}
+            onOpen={onOpen}
+            mediaType={mediaType}
+          />
+        ) : null
+      )}
+    </React.Fragment>
+  );
+}
+
+/* ── Main App ────────────────────────────────────────────────────────────── */
+const TWEAK_DEFAULTS = {
+  "variant": "aurora",
+  "glowStrength": 1,
+  "cardRadius": 14,
+  "ambientIntensity": 1,
+  "fontFamily": "geist",
+  "heroSpeed": 8,
+};
+
+function App() {
+  const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const route = useRouter();
+
+  const [dataLoaded, setDataLoaded] = React.useState(false);
+  const [tab, setTab] = React.useState('home');
+  const [heroIdx, setHeroIdx] = React.useState(0);
+  const [heroPaused, setHeroPaused] = React.useState(false);
+  const [mobileScreen, setMobileScreen] = React.useState('home');
+  const [contItems, setContItems] = React.useState([]);
+
+  const [profileReady, setProfileReady] = React.useState(() => !!localStorage.getItem('currentProfileId'));
+  const [showPicker, setShowPicker] = React.useState(false);
+  const [, forceUpdate] = React.useState(0);
+  const [recsRow, setRecsRow] = React.useState(null);
+
+  const bgRef = React.useRef(null);
+  const overTimerRef = React.useRef(null);
+
+  /* ── Expose profile picker globally ──── */
+  React.useEffect(() => {
+    window.showProfilePicker = () => setShowPicker(true);
+    return () => { delete window.showProfilePicker; };
+  }, []);
+
+  /* ── Pre-warm genre caches so tab switches feel instant ──── */
+  React.useEffect(() => {
+    Object.values(GENRE_ENDPOINT).forEach(ep => window.fetchWithCache(ep).catch(() => {}));
+  }, []);
+
+  /* ── Real-Debrid expiry warning ──── */
+  const [rdWarning, setRdWarning] = React.useState(null);
+  React.useEffect(() => {
+    fetch(`${window.API_BASE_URL}/rd-status`)
+      .then(r => r.json())
+      .then(d => {
+        if (!d.enabled || d.premium === null) return;
+        if (!d.premium) { setRdWarning('expired'); return; }
+        if (d.days_left <= 5) setRdWarning(`${d.days_left}`);
+      })
+      .catch(() => {});
+  }, []);
+
+  /* ── Load data ──── */
+  React.useEffect(() => {
+    async function load() {
+      await window.initializeData();
+      const storedId = parseInt(localStorage.getItem('currentProfileId') || '0');
+      if (storedId) {
+        try {
+          const r = await fetch(`${window.API_BASE_URL}/profiles`);
+          const d = await r.json();
+          if (d.success) {
+            const found = d.data.find(p => p.id === storedId);
+            if (found) { window.currentProfile = found; window.currentProfileId = found.id; forceUpdate(n => n+1); }
+            else { localStorage.removeItem('currentProfileId'); setProfileReady(false); }
+          }
+        } catch (_) {}
+      }
+      setDataLoaded(true);
+    }
+    load();
+  }, []);
+
+  /* ── Load continue watching ──── */
+  React.useEffect(() => {
+    if (!dataLoaded) return;
+    const pid = window.currentProfileId || 1;
+    fetch(`${window.API_BASE_URL}/progress/continue-watching?profile_id=${pid}`)
+      .then(r => r.json())
+      .then(d => {
+        const items = (d.data || []).map(it => {
+          const key = `${it.media_type}_${it.media_id}`;
+          const base = ITEMS[key];
+          if (!base) return null;
+          return { ...base, progress: it.progress || 0, timeLeft: it.time_left || '' };
+        }).filter(Boolean);
+        setContItems(items);
+      })
+      .catch(() => {});
+  }, [dataLoaded, profileReady]);
+
+  /* ── "Because you watched X" lazy row ──── */
+  React.useEffect(() => {
+    if (!dataLoaded || contItems.length === 0) return;
+    const ref = contItems[0];
+    if (!ref?.id) return;
+    const [type, id] = ref.id.split('_');
+    fetch(`${window.API_BASE_URL}/recommendations/${type}/${id}`)
+      .then(r => r.json())
+      .then(d => {
+        if (!d.success || !d.data?.length) return;
+        d.data.forEach(item => { ITEMS[item.id] = item; });
+        setRecsRow({
+          id: 'becauseOf',
+          label: `Because You Watched: ${ref.title}`,
+          layout: 'portrait',
+          items: d.data.map(i => i.id),
+        });
+      })
+      .catch(() => {});
+  }, [dataLoaded, contItems.length]);
+
+  /* ── matchMedia compact toggle ──── */
+  React.useEffect(() => {
+    const mq = window.matchMedia('(max-width:820px)');
+    const apply = () => document.documentElement.classList.toggle('compact', mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
+  /* ── Apply tweaks ──── */
+  React.useEffect(() => {
+    const r = document.documentElement.style;
+    r.setProperty('--glow-strength', t.glowStrength || 1);
+    r.setProperty('--card-radius', (t.cardRadius || 14) + 'px');
+    r.setProperty('--accent', '#2f86ff');
+    r.setProperty('--accent-2', '#5468ff');
+    document.documentElement.dataset.font = t.fontFamily || 'geist';
+  }, [t]);
+
+  /* ── Hero list ──── */
+  const heroList = React.useMemo(() => {
+    if (!dataLoaded) return [];
+    return HERO_LIST.map((id, i) => {
+      const item = ITEMS[id];
+      return item ? makeHero(item, i) : null;
+    }).filter(Boolean);
+  }, [dataLoaded]);
+
+  /* ── Auto-rotate hero ──── */
+  React.useEffect(() => {
+    if (heroPaused || heroList.length === 0) return;
+    const speed = (t.heroSpeed || 8) * 1000;
+    const id = setInterval(() => setHeroIdx(i => (i + 1) % heroList.length), speed);
+    return () => clearInterval(id);
+  }, [heroList, heroPaused, t.heroSpeed]);
+
+  const hero = heroList[heroIdx] || heroList[0] || null;
+
+  /* ── Sync #bg and --glow with hero ──── */
+  React.useEffect(() => {
+    if (!hero) return;
+    document.documentElement.style.setProperty('--glow', hero.tone || '#2f86ff');
+    const bg = document.getElementById('bg');
+    if (bg) {
+      const src = hero.backdrop_path
+        ? `https://image.tmdb.org/t/p/w1280${hero.backdrop_path}`
+        : backdropUrl(hero);
+      if (src) bg.style.backgroundImage = `url(${src})`;
+    }
+  }, [hero?.id]);
+
+  /* ── Build rows for current tab ──── */
+  const rows = React.useMemo(() => {
+    if (!dataLoaded) return [];
+    const result = [];
+
+    // Continue watching row — filter by tab so movies don't appear on TV tab and vice versa
+    const cwFiltered = tab === 'movies'
+      ? contItems.filter(i => i.id.startsWith('movie_'))
+      : tab === 'series'
+      ? contItems.filter(i => i.id.startsWith('tv_'))
+      : contItems;
+
+    if (cwFiltered.length > 0 && ['home','movies','series'].includes(tab)) {
+      result.push({ id: 'cont', label: 'Continue Watching', layout: 'continue', items: cwFiltered });
+    }
+
+    // IDs already shown in CW — exclude them from browse rows so nothing appears twice
+    const cwIdSet = new Set(cwFiltered.map(i => i.id));
+
+    // Backend rows filtered by tab
+    for (const row of ROWS) {
+      const cfg = ROW_CONFIG[row.id];
+      if (!cfg) continue;
+      if (!cfg.tabs.includes(tab)) continue;
+      const dedupedItems = (row.items || []).filter(id => !cwIdSet.has(id));
+      result.push({ ...row, layout: cfg.layout, label: cfg.label || row.label, items: dedupedItems });
+    }
+
+    return result;
+  }, [dataLoaded, tab, contItems]);
+
+  /* ── Card click → navigate to detail page ──── */
+  function openItem(item) {
+    const [type, id] = item.id.split('_');
+    window.navigate(`detail/${type}/${id}`);
+  }
+
+  /* ── Mobile nav handler ──── */
+  function handleMobileNav(id) {
+    setMobileScreen(id);
+    if (id === 'home') { setTab('home'); window.navigate('home'); }
+    else if (id === 'search') window.navigate('search');
+    else if (id === 'library') window.navigate('library');
+    else if (id === 'account') window.showProfilePicker?.();
+  }
+
+  /* ── Tab change ──── */
+  function handleTabChange(t) {
+    setTab(t);
+    window.navigate('home');
+    setHeroIdx(0);
+  }
+
+  /* ── Splash ──── */
+  if (!dataLoaded) return <SplashScreen/>;
+
+  /* ── Profile picker ──── */
+  if (!profileReady || showPicker) {
+    return (
+      <div className="app">
+        <div id="bg" ref={bgRef}/>
+        <ProfilePicker
+          onSelect={() => { setProfileReady(true); setShowPicker(false); forceUpdate(n => n+1); }}
+          onClose={profileReady ? () => setShowPicker(false) : null}/>
+      </div>
+    );
+  }
+
+  /* ── Non-home router pages ──── */
+  /* ── Tab redirect for hash-based tab routes ──── */
+  const tabRouteMap = { movies: 'movies', tv: 'series', anime: 'anime', sports: 'sports' };
+  if (route.page && tabRouteMap[route.page] && tab !== tabRouteMap[route.page]) {
+    setTab(tabRouteMap[route.page]);
+    window.navigate('home');
+  }
+
+  const routerPages = { detail: true, search: true, library: true, history: true, genre: true, sport: true };
+
+  if (route.page && route.page !== 'home' && routerPages[route.page]) {
+    return (
+      <React.Fragment>
+        <div id="bg" ref={bgRef} style={{display:'none'}}/>
+        <div className="app">
+          <TopNav tab={tab} setTab={handleTabChange} sticky={true}/>
+          <main className="inner-page">
+            {route.page === 'detail' && route.params
+              ? <DetailPage key={`${route.params.mediaType}_${route.params.mediaId}`} mediaType={route.params.mediaType} mediaId={route.params.mediaId}/>
+              : route.page === 'search' ? <SearchPage/>
+              : route.page === 'library' ? <LibraryPage/>
+              : route.page === 'history' ? <HistoryPage/>
+              : route.page === 'genre' ? <GenrePage mediaType={route.params.mediaType} initialGenre={route.params.genreName}/>
+              : route.page === 'sport' ? <SportDetailPage gameId={route.params.gameId}/>
+              : null}
+          </main>
+          <BottomBar active={mobileScreen} onNav={handleMobileNav}/>
+        </div>
+        <TweaksPanel>
+          <TweakSection label="Style"/>
+          <TweakSlider label="Glow intensity" value={t.glowStrength} min={0} max={2} step={0.05}
+            onChange={v => setTweak('glowStrength', v)}/>
+          <TweakSlider label="Card radius" value={t.cardRadius} min={0} max={30} step={1} unit="px"
+            onChange={v => setTweak('cardRadius', v)}/>
+          <TweakSlider label="Hero speed (s)" value={t.heroSpeed} min={4} max={20} step={1}
+            onChange={v => setTweak('heroSpeed', v)}/>
+        </TweaksPanel>
+      </React.Fragment>
+    );
+  }
+
+  /* ── Main home/tab view ──── */
+  return (
+    <React.Fragment>
+      {rdWarning && (
+        <div style={{
+          position:'fixed', top:0, left:0, right:0, zIndex:9999,
+          background: rdWarning === 'expired' ? '#c0392b' : '#e67e22',
+          color:'#fff', textAlign:'center', padding:'10px 16px',
+          fontSize:'14px', fontWeight:600, letterSpacing:'.02em',
+        }}>
+          {rdWarning === 'expired'
+            ? '⚠️ Real-Debrid subscription expired — streams unavailable. Renew at real-debrid.com'
+            : `⚠️ Real-Debrid expires in ${rdWarning} day${rdWarning === '1' ? '' : 's'} — renew at real-debrid.com`
+          }
+          <button onClick={() => setRdWarning(null)} style={{
+            marginLeft:16, background:'none', border:'1px solid rgba(255,255,255,.5)',
+            color:'#fff', borderRadius:4, padding:'2px 10px', cursor:'pointer', fontSize:12,
+          }}>Dismiss</button>
+        </div>
+      )}
+      <div id="bg" ref={bgRef}/>
+      <div className="app">
+        <MobileTop tab={tab} setTab={handleTabChange}/>
+        <Hero
+          hero={hero}
+          heroList={heroList}
+          heroIdx={heroIdx}
+          setHeroIdx={setHeroIdx}
+          paused={heroPaused}
+          setPaused={setHeroPaused}
+          nav={<TopNav tab={tab} setTab={handleTabChange}/>}/>
+        <div className="rails">
+          {tab === 'kids' ? (
+            <div className="coming-soon">
+              <div className="coming-soon__word">Kids</div>
+              <div className="coming-soon__tag">Coming soon</div>
+            </div>
+          ) : tab === 'sports' ? (
+            <SportsPage/>
+          ) : (
+            <React.Fragment>
+              {rows.map(r => <Row key={r.id} row={r} onOpen={openItem}/>)}
+              {tab === 'home' && recsRow && <Row key="recs" row={recsRow} onOpen={openItem}/>}
+              {tab !== 'home' && <GenreTabRows tab={tab} onOpen={openItem}/>}
+            </React.Fragment>
+          )}
+        </div>
+        <BottomBar active={mobileScreen} onNav={handleMobileNav}/>
+      </div>
+      <TweaksPanel>
+        <TweakSection label="Style"/>
+        <TweakSlider label="Glow intensity" value={t.glowStrength} min={0} max={2} step={0.05}
+          onChange={v => setTweak('glowStrength', v)}/>
+        <TweakSlider label="Card radius" value={t.cardRadius} min={0} max={30} step={1} unit="px"
+          onChange={v => setTweak('cardRadius', v)}/>
+        <TweakSlider label="Hero speed (s)" value={t.heroSpeed} min={4} max={20} step={1}
+          onChange={v => setTweak('heroSpeed', v)}/>
+      </TweaksPanel>
+    </React.Fragment>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
 <script src="tvnav.js"></script>
 </body>
 </html>

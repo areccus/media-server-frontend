@@ -2,27 +2,6 @@
 
 const { useState, useEffect, useRef } = React;
 
-function PageSpinner({ label }) {
-  return (
-    <div className="page-spinner">
-      <div className="page-spinner__ring">
-        <svg viewBox="0 0 44 44" fill="none">
-          <circle cx="22" cy="22" r="18" stroke="rgba(255,255,255,0.08)" strokeWidth="3"/>
-          <circle cx="22" cy="22" r="18" stroke="url(#spin-grad)" strokeWidth="3"
-            strokeLinecap="round" strokeDasharray="28 85"
-            style={{ transformOrigin: '22px 22px', animation: 'page-spin 0.9s linear infinite' }}/>
-          <defs>
-            <linearGradient id="spin-grad" x1="0" y1="0" x2="44" y2="44" gradientUnits="userSpaceOnUse">
-              <stop offset="0%" stopColor="rgba(255,255,255,0.9)"/>
-              <stop offset="100%" stopColor="rgba(255,255,255,0.2)"/>
-            </linearGradient>
-          </defs>
-        </svg>
-      </div>
-      {label && <div className="page-spinner__label">{label}</div>}
-    </div>
-  );
-}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Search Page

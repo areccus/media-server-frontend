@@ -91,7 +91,7 @@ if (window.location.protocol === 'https:') {
   window.fetch = (input, init = {}) => {
     const url = typeof input === 'string' ? input : (input?.url ?? '');
     if (url.includes('/api/') || url.startsWith(API_BASE_URL)) {
-      init = { ...init, headers: { 'ngrok-skip-browser-warning': '1', ...(init.headers || {}) } };
+      init = { ...init, headers: { 'ngrok-skip-browser-warning': '1', 'Cache-Control': 'no-cache', ...(init.headers || {}) } };
     }
     return _origFetch(input, init);
   };
@@ -188,12 +188,22 @@ async function detectBackendPort() {
 const apiCache = {
   data: {},
   timestamps: {},
-  CACHE_DURATION: 8 * 60 * 60 * 1000,    // 8 hours in-memory
-  DISK_DURATION:  24 * 60 * 60 * 1000,  // 24 hours localStorage
+  CACHE_DURATION: 30 * 60 * 1000,
+  DISK_DURATION:  2 * 60 * 60 * 1000,
 };
 
-// localStorage helpers — silent on quota errors
 const LS_PREFIX = 'halo_cache_';
+const LS_VERSION = 'halo_cache_version';
+const CACHE_VER = '4';
+// Wipe all stale localStorage entries whenever the cache version bumps
+try {
+  if (localStorage.getItem(LS_VERSION) !== CACHE_VER) {
+    Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX)).forEach(k => localStorage.removeItem(k));
+    localStorage.setItem(LS_VERSION, CACHE_VER);
+  }
+} catch {}
+
+// localStorage helpers — silent on quota errors
 function lsGet(endpoint) {
   try {
     const raw = localStorage.getItem(LS_PREFIX + endpoint);
@@ -563,6 +573,8 @@ async function initializeData() {
           window.cachedSet = new Set(
             (d.data || []).map(e => `${e.media_type}_${e.media_id}`)
           );
+          // Notify cards to re-render now that cachedSet is ready
+          window.dispatchEvent(new CustomEvent('cachedset-ready'));
         }
       })
       .catch(() => {});

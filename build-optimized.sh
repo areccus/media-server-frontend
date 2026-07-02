@@ -30,13 +30,16 @@ cat > dist/index.html << 'HTMLEOF'
 </head>
 <body>
 <div id="root"></div>
-<script type="text/babel" data-type="module" data-presets="react">
+<script type="text/babel" data-presets="react">
 HTMLEOF
 
 # Combine all JSX files into one inline block (1 network round-trip instead of 7)
+# Single React destructure at top; strip per-file duplicates to avoid redeclaration errors.
 echo "const { useState, useEffect, useRef, useMemo, useCallback, useLayoutEffect, memo } = React;" >> dist/index.html
 
-cat tweaks-panel.jsx data.jsx router.jsx detail-page.jsx pages.jsx components.jsx app.jsx >> dist/index.html
+for f in tweaks-panel.jsx data.jsx router.jsx detail-page.jsx pages.jsx components.jsx app.jsx; do
+  sed '/^const {[^}]*} = React;/d' "$f" >> dist/index.html
+done
 
 cat >> dist/index.html << 'HTMLEOF'
 </script>

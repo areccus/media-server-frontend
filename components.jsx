@@ -538,6 +538,12 @@ function PortraitCard({ item, onOpen }) {
     setTrailerKey(null);
   }
 
+  const [, _forceCache] = useState(0);
+  useEffect(() => {
+    const handler = () => _forceCache(n => n + 1);
+    window.addEventListener('cachedset-ready', handler);
+    return () => window.removeEventListener('cachedset-ready', handler);
+  }, []);
   const isCached = window.cachedSet?.has(item.id);
 
   return (
@@ -565,10 +571,6 @@ function PortraitCard({ item, onOpen }) {
   );
 }
 
-/* ── CategoryCard — alias for library/pages compatibility ────────────────── */
-function CategoryCard({ item, onOpen, glowMode, glowIntensity, cardRadius }) {
-  return <PortraitCard item={item} onOpen={onOpen}/>;
-}
 
 /* ── Exports ─────────────────────────────────────────────────────────────── */
 Object.assign(window, {
