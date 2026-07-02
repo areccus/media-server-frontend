@@ -25,6 +25,7 @@ function ProfilePicker({ onSelect, onClose }) {
   const [formAvatar, setFormAvatar] = React.useState('🦊');
   const [confirmDelete, setConfirmDelete] = React.useState(false);
   const [hoveredId, setHoveredId] = React.useState(null);
+  const [manageMode, setManageMode] = React.useState(false);   // Disney+/Netflix-style "Edit Profiles" toggle
   // PIN lock state
   const [pinTarget, setPinTarget]   = React.useState(null);  // profile awaiting PIN
   const [pinInput, setPinInput]     = React.useState('');
@@ -97,6 +98,7 @@ function ProfilePicker({ onSelect, onClose }) {
   }
 
   async function selectProfile(profile) {
+    if (manageMode) { openEdit(profile, { stopPropagation(){} }); return; }
     const r = await fetch(`${window.API_BASE_URL}/profiles/${profile.id}/verify-pin`, {
       method: 'POST', headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({pin: ''})
@@ -135,35 +137,37 @@ function ProfilePicker({ onSelect, onClose }) {
     setPinSetting('');
   }
 
-  // Deterministic tile gradient per profile — same profile always gets the
-  // same color across sessions and devices (keyed on id).
+  // Deterministic circle gradient per profile — same profile always gets the
+  // same color across sessions and devices (keyed on id). Muted, single-hue
+  // gradients (not rainbow-bright) read as premium rather than playful.
   const TILE_GRADS = [
-    ['#2f86ff', '#5468ff'],   // halo blue
-    ['#e0526e', '#f2a04b'],   // sunset
-    ['#12a887', '#43dd83'],   // emerald
-    ['#7d3fe0', '#4a4de0'],   // violet
-    ['#e0508f', '#8c3fb8'],   // magenta
-    ['#2aa8d8', '#2f6de0'],   // ocean
+    ['#1f4fa8', '#2f86ff'],   // halo blue
+    ['#a83a5a', '#e0526e'],   // rose
+    ['#0e7a5f', '#12a887'],   // emerald
+    ['#5a2fa8', '#7d3fe0'],   // violet
+    ['#7a3560', '#a83a7a'],   // plum
+    ['#1a6f8f', '#2aa8d8'],   // ocean
   ];
   const gradFor = (id) => TILE_GRADS[Math.abs(id) % TILE_GRADS.length];
 
   const S = {
-    wrap: {position:'fixed',inset:0,background:'radial-gradient(120% 100% at 50% 0%, #0d1017 0%, #06080c 70%)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'32px 16px',overflowY:'auto'},
-    title: {fontSize:'clamp(28px, 4vw, 40px)',fontWeight:500,marginBottom:'48px',color:'#fff',letterSpacing:'.01em'},
-    tile: (id, hov) => ({width:'116px',height:'116px',borderRadius:'18px',padding:0,cursor:'pointer',display:'grid',placeItems:'center',background:`linear-gradient(135deg, ${gradFor(id)[0]}, ${gradFor(id)[1]})`,border:hov?'2.5px solid rgba(255,255,255,.95)':'2.5px solid transparent',transform:hov?'scale(1.07)':'scale(1)',transition:'transform .18s cubic-bezier(.22,.61,.36,1), border-color .18s, box-shadow .18s',boxShadow:hov?'0 20px 44px -14px rgba(0,0,0,.75)':'0 10px 28px -16px rgba(0,0,0,.6)'}),
-    tileAdd: (hov) => ({width:'116px',height:'116px',borderRadius:'18px',padding:0,cursor:'pointer',display:'grid',placeItems:'center',background:hov?'rgba(255,255,255,.06)':'transparent',border:`2px dashed rgba(255,255,255,${hov?'.5':'.22'})`,transform:hov?'scale(1.05)':'scale(1)',transition:'transform .18s cubic-bezier(.22,.61,.36,1), border-color .18s, background .18s'}),
-    name: (hov) => ({fontSize:'15px',fontWeight:500,color:hov?'#fff':'rgba(255,255,255,.55)',transition:'color .15s',maxWidth:'116px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textAlign:'center'}),
+    wrap: {position:'fixed',inset:0,background:'radial-gradient(ellipse 90% 70% at 50% 40%, #12151d 0%, #06070a 65%)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',zIndex:1000,padding:'32px 16px',overflowY:'auto'},
+    kicker: {fontSize:'13px',fontWeight:600,letterSpacing:'.14em',textTransform:'uppercase',color:'rgba(255,255,255,.32)',marginBottom:'14px'},
+    title: {fontSize:'clamp(26px, 3.4vw, 34px)',fontWeight:600,marginBottom:'56px',color:'#fff',letterSpacing:'-.01em'},
+    circle: (id, hov, editMode) => ({width:'148px',height:'148px',borderRadius:'50%',padding:0,cursor:'pointer',display:'grid',placeItems:'center',background:`linear-gradient(150deg, ${gradFor(id)[0]}, ${gradFor(id)[1]})`,border:hov&&!editMode?'3px solid #fff':'3px solid transparent',transform:hov&&!editMode?'scale(1.06)':editMode?'scale(0.94)':'scale(1)',opacity:editMode?0.55:1,filter:editMode?'grayscale(0.15)':'none',transition:'transform .22s cubic-bezier(.22,.61,.36,1), border-color .18s, opacity .2s, box-shadow .22s',boxShadow:hov&&!editMode?'0 22px 48px -16px rgba(0,0,0,.8)':'0 12px 32px -18px rgba(0,0,0,.7)'}),
+    circleAdd: (hov) => ({width:'148px',height:'148px',borderRadius:'50%',padding:0,cursor:'pointer',display:'grid',placeItems:'center',background:hov?'rgba(255,255,255,.07)':'rgba(255,255,255,.03)',border:`2px dashed rgba(255,255,255,${hov?'.55':'.24'})`,transform:hov?'scale(1.05)':'scale(1)',transition:'transform .22s cubic-bezier(.22,.61,.36,1), border-color .18s, background .18s'}),
+    name: (hov) => ({fontSize:'16px',fontWeight:600,color:hov?'#fff':'rgba(255,255,255,.58)',transition:'color .15s',maxWidth:'148px',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis',textAlign:'center'}),
     input: {width:'100%',padding:'13px 16px',background:'rgba(255,255,255,.07)',border:'1px solid rgba(255,255,255,.15)',borderRadius:'12px',color:'#fff',fontSize:'16px',fontFamily:'inherit',outline:'none'},
-    btnPrimary: {padding:'11px 30px',background:'linear-gradient(135deg, #2f86ff, #5468ff)',color:'#fff',border:'none',borderRadius:'999px',fontSize:'14px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'},
-    btnGlass: {padding:'11px 30px',background:'rgba(255,255,255,.08)',color:'#fff',border:'1px solid rgba(255,255,255,.14)',borderRadius:'999px',fontSize:'14px',cursor:'pointer',fontFamily:'inherit'},
-    btnDanger: {padding:'11px 30px',background:'rgba(220,50,50,.15)',color:'#ff6b6b',border:'1px solid rgba(220,50,50,.3)',borderRadius:'999px',fontSize:'14px',cursor:'pointer',fontFamily:'inherit'},
+    btnPrimary: {padding:'12px 32px',background:'#fff',color:'#0a0b0d',border:'none',borderRadius:'8px',fontSize:'15px',fontWeight:700,cursor:'pointer',fontFamily:'inherit'},
+    btnGlass: {padding:'12px 32px',background:'transparent',color:'rgba(255,255,255,.7)',border:'1px solid rgba(255,255,255,.3)',borderRadius:'8px',fontSize:'15px',fontWeight:600,cursor:'pointer',fontFamily:'inherit'},
+    btnDanger: {padding:'12px 32px',background:'rgba(220,50,50,.15)',color:'#ff6b6b',border:'1px solid rgba(220,50,50,.3)',borderRadius:'8px',fontSize:'15px',fontWeight:600,cursor:'pointer',fontFamily:'inherit'},
   };
 
   const avatarGrid = (
-    <div style={{display:'flex',flexWrap:'wrap',gap:'10px',justifyContent:'center'}}>
+    <div style={{display:'flex',flexWrap:'wrap',gap:'10px',justifyContent:'center',maxWidth:'320px'}}>
       {AVATARS.map(a => (
         <button key={a} onClick={() => setFormAvatar(a)}
-          style={{fontSize:'28px',cursor:'pointer',background:'none',border:'none',padding:'6px',borderRadius:'8px',lineHeight:1,outline:formAvatar===a?'2px solid #2f86ff':'none'}}>
+          style={{fontSize:'26px',cursor:'pointer',background:formAvatar===a?'rgba(47,134,255,.18)':'none',border:'none',padding:'7px',borderRadius:'10px',lineHeight:1,outline:formAvatar===a?'2px solid #2f86ff':'none'}}>
           {a}
         </button>
       ))}
@@ -172,14 +176,15 @@ function ProfilePicker({ onSelect, onClose }) {
 
   if (mode === 'add') return (
     <div style={S.wrap}>
-      <h1 style={{fontSize:'26px',fontWeight:600,marginBottom:'32px',color:'#fff'}}>Create Profile</h1>
-      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'20px',width:'100%',maxWidth:'360px'}}>
+      <h1 style={{fontSize:'24px',fontWeight:700,marginBottom:'36px',color:'#fff',letterSpacing:'-.01em'}}>Add Profile</h1>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'22px',width:'100%',maxWidth:'340px'}}>
+        <div style={{width:'96px',height:'96px',borderRadius:'50%',display:'grid',placeItems:'center',background:'linear-gradient(150deg, #2a2d38, #1a1c24)',fontSize:'48px'}}>{formAvatar}</div>
         <input autoFocus value={formName} onChange={e=>setFormName(e.target.value)}
           onKeyDown={e=>e.key==='Enter'&&createProfile()} placeholder="Name" style={S.input}/>
         {avatarGrid}
-        <div style={{display:'flex',gap:'10px'}}>
-          <button onClick={createProfile} style={S.btnPrimary}>Create</button>
+        <div style={{display:'flex',gap:'12px',marginTop:'8px'}}>
           <button onClick={resetForm} style={S.btnGlass}>Cancel</button>
+          <button onClick={createProfile} style={S.btnPrimary}>Continue</button>
         </div>
       </div>
     </div>
@@ -187,17 +192,17 @@ function ProfilePicker({ onSelect, onClose }) {
 
   if (mode === 'edit' && editing) return (
     <div style={S.wrap}>
-      <h1 style={{fontSize:'26px',fontWeight:600,marginBottom:'32px',color:'#fff'}}>Edit Profile</h1>
-      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'20px',width:'100%',maxWidth:'360px'}}>
-        <span style={{fontSize:'56px',lineHeight:1}}>{formAvatar}</span>
+      <h1 style={{fontSize:'24px',fontWeight:700,marginBottom:'36px',color:'#fff',letterSpacing:'-.01em'}}>Edit Profile</h1>
+      <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'22px',width:'100%',maxWidth:'340px'}}>
+        <div style={{width:'96px',height:'96px',borderRadius:'50%',display:'grid',placeItems:'center',background:`linear-gradient(150deg, ${gradFor(editing.id)[0]}, ${gradFor(editing.id)[1]})`,fontSize:'48px'}}>{formAvatar}</div>
         <input autoFocus value={formName} onChange={e=>setFormName(e.target.value)}
           onKeyDown={e=>e.key==='Enter'&&saveEdit()} placeholder="Name" style={S.input}/>
         {avatarGrid}
-        <div style={{display:'flex',gap:'10px'}}>
-          <button onClick={saveEdit} style={S.btnPrimary}>Save</button>
+        <div style={{display:'flex',gap:'12px',marginTop:'8px'}}>
           <button onClick={resetForm} style={S.btnGlass}>Cancel</button>
+          <button onClick={saveEdit} style={S.btnPrimary}>Save</button>
         </div>
-        <div style={{width:'100%',borderTop:'1px solid rgba(255,255,255,.08)',paddingTop:'16px'}}>
+        <div style={{width:'100%',borderTop:'1px solid rgba(255,255,255,.08)',paddingTop:'18px',marginTop:'6px'}}>
           <p style={{color:'rgba(255,255,255,.4)',fontSize:'12px',margin:'0 0 8px',textAlign:'center'}}>
             Profile PIN (leave blank to remove)
           </p>
@@ -209,13 +214,13 @@ function ProfilePicker({ onSelect, onClose }) {
           </div>
         </div>
         {profiles.length > 1 && (
-          <div style={{marginTop:'8px',width:'100%',textAlign:'center'}}>
+          <div style={{marginTop:'4px',width:'100%',textAlign:'center'}}>
             {confirmDelete
               ? <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'10px'}}>
                   <p style={{color:'#ff6b6b',fontSize:'13px',margin:0}}>Delete "{editing.name}"? This removes all watch history for this profile.</p>
                   <div style={{display:'flex',gap:'10px'}}>
-                    <button onClick={deleteProfile} style={S.btnDanger}>Yes, Delete</button>
                     <button onClick={()=>setConfirmDelete(false)} style={S.btnGlass}>Keep It</button>
+                    <button onClick={deleteProfile} style={S.btnDanger}>Yes, Delete</button>
                   </div>
                 </div>
               : <button onClick={()=>setConfirmDelete(true)}
@@ -230,8 +235,8 @@ function ProfilePicker({ onSelect, onClose }) {
 
   if (pinTarget) return (
     <div style={S.wrap}>
-      <span style={{fontSize:'64px',lineHeight:1,marginBottom:'8px'}}>{pinTarget.avatar}</span>
-      <h1 style={{fontSize:'22px',fontWeight:600,marginBottom:'4px',color:'#fff'}}>{pinTarget.name}</h1>
+      <div style={{width:'96px',height:'96px',borderRadius:'50%',display:'grid',placeItems:'center',background:`linear-gradient(150deg, ${gradFor(pinTarget.id)[0]}, ${gradFor(pinTarget.id)[1]})`,fontSize:'48px',marginBottom:'20px'}}>{pinTarget.avatar}</div>
+      <h1 style={{fontSize:'21px',fontWeight:700,marginBottom:'4px',color:'#fff'}}>{pinTarget.name}</h1>
       <p style={{fontSize:'13px',color:'rgba(255,255,255,.45)',margin:'0 0 28px'}}>Enter PIN to continue</p>
       <input autoFocus type="password" inputMode="numeric" maxLength={8}
         value={pinInput} onChange={e=>{setPinInput(e.target.value);setPinError(false);}}
@@ -239,54 +244,65 @@ function ProfilePicker({ onSelect, onClose }) {
         placeholder="••••"
         style={{...S.input, maxWidth:'200px', textAlign:'center', fontSize:'24px', letterSpacing:'.3em'}}/>
       {pinError && <p style={{color:'#ff6b6b',fontSize:'13px',margin:'8px 0 0'}}>Incorrect PIN</p>}
-      <div style={{display:'flex',gap:'10px',marginTop:'20px'}}>
-        <button onClick={submitPin} style={S.btnPrimary}>Unlock</button>
+      <div style={{display:'flex',gap:'12px',marginTop:'22px'}}>
         <button onClick={()=>setPinTarget(null)} style={S.btnGlass}>Back</button>
+        <button onClick={submitPin} style={S.btnPrimary}>Unlock</button>
       </div>
     </div>
   );
 
   return (
     <div style={S.wrap}>
-      <h1 style={S.title}>Who's watching?</h1>
-      <div style={{display:'flex',flexWrap:'wrap',gap:'32px 28px',justifyContent:'center',maxWidth:'760px',padding:'12px'}}>
+      <div style={S.kicker}>HALO</div>
+      <h1 style={S.title}>{manageMode ? 'Manage Profiles' : "Who's watching?"}</h1>
+      <div style={{display:'flex',flexWrap:'wrap',gap:'20px 36px',justifyContent:'center',maxWidth:'840px',padding:'12px'}}>
         {profiles.map(p => {
           const hov = hoveredId === p.id;
           return (
-            <div key={p.id} style={{position:'relative',display:'flex',flexDirection:'column',alignItems:'center',gap:'14px',width:'116px'}}
+            <div key={p.id} style={{position:'relative',display:'flex',flexDirection:'column',alignItems:'center',gap:'16px',width:'148px'}}
               onMouseEnter={()=>setHoveredId(p.id)} onMouseLeave={()=>setHoveredId(null)}>
-              <button style={S.tile(p.id, hov)} onClick={()=>selectProfile(p)} aria-label={p.name}>
-                <span style={{fontSize:'54px',lineHeight:1,filter:'drop-shadow(0 4px 10px rgba(0,0,0,.35))'}}>{p.avatar}</span>
+              <button style={S.circle(p.id, hov, manageMode)} onClick={()=>selectProfile(p)} aria-label={p.name}>
+                <span style={{fontSize:'60px',lineHeight:1,filter:'drop-shadow(0 4px 10px rgba(0,0,0,.35))'}}>{p.avatar}</span>
               </button>
               <span style={S.name(hov)}>{p.name}</span>
-              <button className="profile-edit-btn" onClick={e=>openEdit(p,e)} aria-label={`Edit ${p.name}`}
-                style={{position:'absolute',top:'-9px',right:'-9px',width:'32px',height:'32px',borderRadius:'50%',background:'rgba(14,16,22,.92)',border:'1.5px solid rgba(255,255,255,.28)',color:'#fff',display:'grid',placeItems:'center',cursor:'pointer',padding:0,boxShadow:'0 2px 8px rgba(0,0,0,.5)',transition:'transform .15s, background .15s',zIndex:2}}>
-                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-                  <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
-                </svg>
-              </button>
+              {manageMode && (
+                <button onClick={e=>openEdit(p,e)} aria-label={`Edit ${p.name}`}
+                  style={{position:'absolute',top:'50px',left:'50%',transform:'translateX(-50%)',width:'40px',height:'40px',borderRadius:'50%',background:'rgba(10,11,14,.92)',border:'1.5px solid rgba(255,255,255,.4)',color:'#fff',display:'grid',placeItems:'center',cursor:'pointer',padding:0,zIndex:2}}>
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                </button>
+              )}
             </div>
           );
         })}
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'14px',width:'116px'}}
-          onMouseEnter={()=>setHoveredId('add')} onMouseLeave={()=>setHoveredId(null)}>
-          <button style={S.tileAdd(hoveredId==='add')}
-            onClick={()=>{ setFormName(''); setFormAvatar('🦊'); setMode('add'); }} aria-label="Add profile">
-            <svg viewBox="0 0 24 24" width="34" height="34" fill="none"
-              stroke={hoveredId==='add' ? 'rgba(255,255,255,.85)' : 'rgba(255,255,255,.4)'}
-              strokeWidth="1.8" strokeLinecap="round" style={{transition:'stroke .15s'}}>
-              <path d="M12 5v14M5 12h14"/>
-            </svg>
-          </button>
-          <span style={S.name(hoveredId==='add')}>Add Profile</span>
-        </div>
+        {!manageMode && (
+          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px',width:'148px'}}
+            onMouseEnter={()=>setHoveredId('add')} onMouseLeave={()=>setHoveredId(null)}>
+            <button style={S.circleAdd(hoveredId==='add')}
+              onClick={()=>{ setFormName(''); setFormAvatar('🦊'); setMode('add'); }} aria-label="Add profile">
+              <svg viewBox="0 0 24 24" width="38" height="38" fill="none"
+                stroke={hoveredId==='add' ? 'rgba(255,255,255,.9)' : 'rgba(255,255,255,.4)'}
+                strokeWidth="1.6" strokeLinecap="round" style={{transition:'stroke .15s'}}>
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+            </button>
+            <span style={S.name(hoveredId==='add')}>Add Profile</span>
+          </div>
+        )}
       </div>
-      {onClose && (
+      <button onClick={()=>setManageMode(v=>!v)}
+        style={{marginTop:'52px',background:'none',border:`1px solid rgba(255,255,255,${manageMode?'.7':'.28'})`,borderRadius:'8px',padding:'11px 28px',color:manageMode?'#fff':'rgba(255,255,255,.55)',fontSize:'14px',fontWeight:600,cursor:'pointer',fontFamily:'inherit',letterSpacing:'.02em',transition:'color .15s, border-color .15s'}}
+        onMouseEnter={e=>{e.currentTarget.style.color='#fff';e.currentTarget.style.borderColor='rgba(255,255,255,.7)';}}
+        onMouseLeave={e=>{if(!manageMode){e.currentTarget.style.color='rgba(255,255,255,.55)';e.currentTarget.style.borderColor='rgba(255,255,255,.28)';}}}>
+        {manageMode ? 'Done' : 'Manage Profiles'}
+      </button>
+      {onClose && !manageMode && (
         <button onClick={onClose}
-          style={{marginTop:'48px',background:'none',border:'1px solid rgba(255,255,255,.16)',borderRadius:'999px',padding:'9px 22px',color:'rgba(255,255,255,.45)',fontSize:'13px',cursor:'pointer',fontFamily:'inherit',transition:'color .15s, border-color .15s'}}
-          onMouseEnter={e=>{e.currentTarget.style.color='#fff';e.currentTarget.style.borderColor='rgba(255,255,255,.4)';}}
-          onMouseLeave={e=>{e.currentTarget.style.color='rgba(255,255,255,.45)';e.currentTarget.style.borderColor='rgba(255,255,255,.16)';}}>
+          style={{marginTop:'16px',background:'none',border:'none',color:'rgba(255,255,255,.35)',fontSize:'13px',cursor:'pointer',fontFamily:'inherit',transition:'color .15s'}}
+          onMouseEnter={e=>{e.currentTarget.style.color='rgba(255,255,255,.7)';}}
+          onMouseLeave={e=>{e.currentTarget.style.color='rgba(255,255,255,.35)';}}>
           Continue as {window.currentProfile?.name || 'Guest'}
         </button>
       )}
