@@ -461,6 +461,11 @@ async function initializeData() {
     await detectBackendPort();
     window.API_BASE_URL = API_BASE_URL;
 
+    // Read directly from localStorage (not window.currentProfileId) — this
+    // runs before the profile-restore step in app.jsx's load(), so the
+    // window global isn't populated yet on a fresh page load.
+    const _pid = parseInt(localStorage.getItem('currentProfileId') || '0') || 1;
+
     // ───────────────────────────────────────────────────────────────────────
     // STEP 2: Fetch all data in parallel (Promise.all = runs at same time)
     // ───────────────────────────────────────────────────────────────────────
@@ -471,13 +476,14 @@ async function initializeData() {
     //   const a = await fetch1;
     //   const b = await fetch2;  (waits for a)
     //   const c = await fetch3;  (waits for b)
-    const [heroItems, trending, recommended, movies, tvShows, anime, upcoming] = await Promise.all([
-      fetchWithCache('/hero'),                  // 5 featured items
-      fetchWithCache('/trending?type=all'),     // 10 trending items
-      fetchWithCache('/recommended'),           // 10 recommended movies
-      fetchWithCache('/movies'),                // 10 popular movies
-      fetchWithCache('/tv'),                    // 10 popular TV shows
-      fetchWithCache('/anime'),                 // 10 anime shows
+    const [heroItems, trending, top10, recommended, movies, tvShows, anime, upcoming] = await Promise.all([
+      fetchWithCache('/hero'),                          // 5 featured items
+      fetchWithCache('/trending?type=all'),             // "What's Hot" — weekly trending (recency-weighted)
+      fetchWithCache('/top10'),                         // "Top 10" — popularity chart (a different TMDB signal, not a re-slice of trending)
+      fetchWithCache(`/recommended?profile_id=${_pid}`), // personalized from this profile's watch history when it has any
+      fetchWithCache('/movies'),                        // 10 popular movies
+      fetchWithCache('/tv'),                            // 10 popular TV shows
+      fetchWithCache('/anime'),                         // 10 anime shows
       fetchWithCache('/movies/upcoming').catch(() => []),  // coming soon
     ]);
 
@@ -490,6 +496,7 @@ async function initializeData() {
     const allItems = [
       ...heroItems,
       ...trending,
+      ...top10,
       ...recommended,
       ...movies,
       ...tvShows,
@@ -530,13 +537,16 @@ async function initializeData() {
     ROWS.push(
       {
         id: 'tr',
-        label: 'Trending Now',
+        label: "What's Hot",
         items: trending.map(item => item.id)
       },
       {
         id: 'top10',
         label: 'Top 10 in the US Today',
-        items: trending.slice(0, 10).map(item => item.id)
+        // Its own popularity-ranked chart (see /api/top10), not a re-slice
+        // of the trending list above — that was the bug: they used to be
+        // literally the same 10 items in the same order.
+        items: top10.map(item => item.id)
       },
       {
         id: 'rec',
