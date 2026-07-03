@@ -25,6 +25,7 @@ function DetailPage({ mediaType, mediaId }) {
   // iOS: showTrailerBtn reveals the Watch Trailer button → trailerOpen opens modal
   const [showTrailer, setShowTrailer] = useState(false);
   const [showTrailerBtn, setShowTrailerBtn] = useState(false);
+  const [heroLoaded, setHeroLoaded] = useState(false);
   const trailerTimerRef = useRef(null);
   const loadedIdRef = useRef(null);
 
@@ -38,6 +39,7 @@ function DetailPage({ mediaType, mediaId }) {
     setShowTrailerBtn(false);
     clearTimeout(trailerTimerRef.current);
     setWatchedEpisodes(new Set());
+    setHeroLoaded(false);
   }, [mediaId]);
 
   // Load watched episodes for TV/anime
@@ -270,7 +272,10 @@ function DetailPage({ mediaType, mediaId }) {
         <img
           src={item.backdrop_large || item.backdrop || backdropUrl(item)}
           alt=""
-          className={'detail-hero__img' + (showTrailer ? ' detail-hero__img--hidden' : '')}
+          onLoad={() => setHeroLoaded(true)}
+          className={'detail-hero__img'
+            + (showTrailer ? ' detail-hero__img--hidden' : '')
+            + (heroLoaded ? ' is-active' : '')}
         />
 
         {/* Trailer iframe — autoplays muted on desktop; tap-to-play inline on iOS */}

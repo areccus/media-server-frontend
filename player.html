@@ -65,11 +65,19 @@
       z-index:30;
       opacity:0;
       pointer-events:none;
-      transition:opacity .22s ease;
+      transition:opacity .22s cubic-bezier(.22,.61,.36,1), transform .22s cubic-bezier(.22,.61,.36,1);
     }
     .bar.on {
       opacity:1;
       pointer-events:all;
+    }
+    /* Bars glide in from just off-screen rather than only fading. */
+    #top { transform:translateY(-8px); }
+    #top.on { transform:translateY(0); }
+    #bot { transform:translateY(8px); }
+    #bot.on { transform:translateY(0); }
+    @media (prefers-reduced-motion: reduce) {
+      .bar, #top, #bot { transition:opacity .22s ease; transform:none !important; }
     }
 
     /* ── Top bar ──────────────────────────────────────────────────────── */
@@ -309,7 +317,17 @@
       z-index:100;
       box-shadow:0 8px 32px rgba(0,0,0,.5);
     }
-    #speed-menu.open, #quality-menu.open, #source-menu.open { display:flex; }
+    #speed-menu.open, #quality-menu.open, #source-menu.open {
+      display:flex;
+      animation: menu-pop .16s cubic-bezier(.22,.61,.36,1);
+    }
+    @keyframes menu-pop {
+      from { opacity:0; transform:translateY(4px) scale(0.98); }
+      to   { opacity:1; transform:translateY(0)   scale(1); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #speed-menu.open, #quality-menu.open, #source-menu.open { animation:none; }
+    }
 
 
     .q-label {

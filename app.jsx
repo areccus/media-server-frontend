@@ -256,10 +256,10 @@ function ProfilePicker({ onSelect, onClose }) {
       <div style={S.kicker}>HALO</div>
       <h1 style={S.title}>{manageMode ? 'Manage Profiles' : "Who's watching?"}</h1>
       <div style={{display:'flex',flexWrap:'wrap',gap:'20px 36px',justifyContent:'center',maxWidth:'840px',padding:'12px'}}>
-        {profiles.map(p => {
+        {profiles.map((p, i) => {
           const hov = hoveredId === p.id;
           return (
-            <div key={p.id} style={{position:'relative',display:'flex',flexDirection:'column',alignItems:'center',gap:'16px',width:'148px'}}
+            <div key={p.id} className="profile-tile-in" style={{position:'relative',display:'flex',flexDirection:'column',alignItems:'center',gap:'16px',width:'148px',animationDelay:`${i*60}ms`}}
               onMouseEnter={()=>setHoveredId(p.id)} onMouseLeave={()=>setHoveredId(null)}>
               <button style={S.circle(p.id, hov, manageMode)} onClick={()=>selectProfile(p)} aria-label={p.name}>
                 <span style={{fontSize:'60px',lineHeight:1,filter:'drop-shadow(0 4px 10px rgba(0,0,0,.35))'}}>{p.avatar}</span>
@@ -278,7 +278,7 @@ function ProfilePicker({ onSelect, onClose }) {
           );
         })}
         {!manageMode && (
-          <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px',width:'148px'}}
+          <div className="profile-tile-in" style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px',width:'148px',animationDelay:`${profiles.length*60}ms`}}
             onMouseEnter={()=>setHoveredId('add')} onMouseLeave={()=>setHoveredId(null)}>
             <button style={S.circleAdd(hoveredId==='add')}
               onClick={()=>{ setFormName(''); setFormAvatar('🦊'); setMode('add'); }} aria-label="Add profile">
@@ -684,7 +684,7 @@ function App() {
           paused={heroPaused}
           setPaused={setHeroPaused}
           nav={<TopNav tab={tab} setTab={handleTabChange}/>}/>
-        <div className="rails">
+        <div className="rails" key={tab}>
           {tab === 'kids' ? (
             <div className="coming-soon">
               <div className="coming-soon__word">Kids</div>

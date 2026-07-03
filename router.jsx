@@ -2,6 +2,17 @@
 
 const { useState, useEffect, useRef } = React;
 
+// Convert a #rrggbb (or #rgb) hex color string to an rgba() string at the
+// given alpha. Used for CategoryCard's tone-based glow custom properties.
+function hexA(hex, alpha) {
+  let h = (hex || '#2f86ff').replace('#', '');
+  if (h.length === 3) h = h.split('').map(c => c + c).join('');
+  const r = parseInt(h.substring(0, 2), 16) || 0;
+  const g = parseInt(h.substring(2, 4), 16) || 0;
+  const b = parseInt(h.substring(4, 6), 16) || 0;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 // Simple hash router hook
 function useRouter() {
   const [route, setRoute] = useState(() => {
