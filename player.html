@@ -1052,7 +1052,13 @@ function advanceNextEp() {
 
 function cancelAutoAdvance() {
   clearInterval(_autoAdvanceTimer);
-  _autoAdvanceActive = false;
+  // Deliberately NOT resetting _autoAdvanceActive to false here: doing so
+  // let the very next timeupdate tick (still inside the last-30-seconds
+  // window, firing almost immediately since the video keeps playing)
+  // re-trigger _showNextEpCard, popping the card right back up after
+  // "Cancel" was clicked. Leaving it true blocks re-triggering for the
+  // rest of this episode; goEp() does a full page navigation for the next
+  // one, so the flag naturally resets to false on that fresh page load.
   _nextEpCard.style.display = 'none';
 }
 
