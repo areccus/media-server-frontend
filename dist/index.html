@@ -4384,10 +4384,33 @@ function App() {
       .then(d => {
         const items = (d.data || []).map(it => {
           const key = `${it.media_type}_${it.media_id}`;
-          const base = ITEMS[key];
-          if (!base) return null;
-          return { ...base, progress: it.progress || 0, timeLeft: it.time_left || '' };
-        }).filter(Boolean);
+          // Prefer the preloaded catalog item when available (carries a few
+          // extra fields like a curated `genre`), but build the item
+          // straight from this response otherwise instead of dropping it.
+          // Continue-watching titles are frequently NOT in the small
+          // preloaded home catalogs (hero/trending/top10/recommended/
+          // movies/tv/anime/upcoming) — silently hiding anything missing
+          // from that list was the actual bug (Library's own Continue
+          // Watching never had this dependency, which is why it always
+          // showed everything correctly).
+          const base = ITEMS[key] || {
+            id: key,
+            title: it.title,
+            poster: it.poster,
+            backdrop: it.backdrop,
+            tone: it.tone,
+            genre: it.genre || '',
+            media_type: it.media_type,
+          };
+          return {
+            ...base,
+            progress: it.progress || 0,
+            timeLeft: it.time_left || '',
+            isMovie: it.media_type === 'movie',
+            season: it.season || 0,
+            episode: it.episode || 0,
+          };
+        });
         setContItems(items);
       })
       .catch(() => {});
@@ -4442,19 +4465,31 @@ function App() {
     }).filter(Boolean);
   }, [dataLoaded]);
 
-  /* ── Auto-rotate hero ──── */
+  // Hero rotation and the #bg sync effect below both need to stop touching
+  // the DOM once we've navigated off Home — they're declared unconditionally
+  // (before any early return, since hooks can't be conditional) so without
+  // this guard they keep running on Search/Detail/Library/etc. too. #bg is
+  // display:none on those routes, but React reconciles the *same* #bg DOM
+  // node across the Home <-> other-page branches (matching position in the
+  // returned tree), so there's a real window where this effect's imperative
+  // `bg.style.backgroundImage = ...` write lands on that shared node around
+  // a route change and the hero image visibly flashes in behind the nav
+  // bar on other pages before display:none reasserts itself.
+  const isHomeRoute = !route.page || route.page === 'home';
+
+  /* ── Auto-rotate hero (only while actually on Home) ──── */
   React.useEffect(() => {
-    if (heroPaused || heroList.length === 0) return;
+    if (!isHomeRoute || heroPaused || heroList.length === 0) return;
     const speed = (t.heroSpeed || 8) * 1000;
     const id = setInterval(() => setHeroIdx(i => (i + 1) % heroList.length), speed);
     return () => clearInterval(id);
-  }, [heroList, heroPaused, t.heroSpeed]);
+  }, [isHomeRoute, heroList, heroPaused, t.heroSpeed]);
 
   const hero = heroList[heroIdx] || heroList[0] || null;
 
-  /* ── Sync #bg and --glow with hero ──── */
+  /* ── Sync #bg and --glow with hero (only while actually on Home) ──── */
   React.useEffect(() => {
-    if (!hero) return;
+    if (!isHomeRoute || !hero) return;
     document.documentElement.style.setProperty('--glow', hero.tone || '#2f86ff');
     const bg = document.getElementById('bg');
     if (bg) {
@@ -4463,7 +4498,7 @@ function App() {
         : backdropUrl(hero);
       if (src) bg.style.backgroundImage = `url(${src})`;
     }
-  }, [hero?.id]);
+  }, [isHomeRoute, hero?.id]);
 
   /* ── Build rows for current tab ──── */
   const rows = React.useMemo(() => {
@@ -4524,8 +4559,8 @@ function App() {
   /* ── Profile picker ──── */
   if (!profileReady || showPicker) {
     return (
-      <div className="app">
-        <div id="bg" ref={bgRef}/>
+      <div className="app" key="app">
+        <div id="bg" key="bg" ref={bgRef}/>
         <ProfilePicker
           onSelect={() => { setProfileReady(true); setShowPicker(false); forceUpdate(n => n+1); }}
           onClose={profileReady ? () => setShowPicker(false) : null}/>
@@ -4546,8 +4581,8 @@ function App() {
   if (route.page && route.page !== 'home' && routerPages[route.page]) {
     return (
       <React.Fragment>
-        <div id="bg" ref={bgRef} style={{display:'none'}}/>
-        <div className="app">
+        <div id="bg" key="bg" ref={bgRef} style={{display:'none'}}/>
+        <div className="app" key="app">
           <TopNav tab={tab} setTab={handleTabChange}/>
           <main className="inner-page">
             {route.page === 'detail' && route.params
@@ -4561,8 +4596,8 @@ function App() {
           </main>
           <BottomBar active={mobileScreen} onNav={handleMobileNav}/>
         </div>
-        <BackToTopButton/>
-        <TweaksPanel>
+        <BackToTopButton key="backtotop"/>
+        <TweaksPanel key="tweaks">
           <TweakSection label="Style"/>
           <TweakSlider label="Glow intensity" value={t.glowStrength} min={0} max={2} step={0.05}
             onChange={v => setTweak('glowStrength', v)}/>
@@ -4579,7 +4614,7 @@ function App() {
   return (
     <React.Fragment>
       {rdWarning && (
-        <div style={{
+        <div key="rdwarning" style={{
           position:'fixed', top:0, left:0, right:0, zIndex:9999,
           background: rdWarning === 'expired' ? '#c0392b' : '#e67e22',
           color:'#fff', textAlign:'center', padding:'10px 16px',
@@ -4595,8 +4630,8 @@ function App() {
           }}>Dismiss</button>
         </div>
       )}
-      <div id="bg" ref={bgRef}/>
-      <div className="app">
+      <div id="bg" key="bg" ref={bgRef}/>
+      <div className="app" key="app">
         <MobileTop tab={tab} setTab={handleTabChange}/>
         <Hero
           hero={hero}
