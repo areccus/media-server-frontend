@@ -103,14 +103,14 @@ function DetailPage({ mediaType, mediaId }) {
       const data = await window.fetchWithCache(`/details/${mediaType}/${mediaId}?profile_id=${pid}`, { noBackground: true });
       loadedIdRef.current = `${mediaType}_${mediaId}`;
       setItem(data);
-      loadSimilar(mediaType);
+      loadSimilar(mediaType, mediaId);
     } catch (error) {
       console.error('Failed to load details:', error);
       const cachedItem = ITEMS[`${mediaType}_${mediaId}`];
       if (cachedItem) {
         loadedIdRef.current = `${mediaType}_${mediaId}`;
         setItem(cachedItem);
-        loadSimilar(mediaType);
+        loadSimilar(mediaType, mediaId);
       }
     } finally {
       setLoading(false);
@@ -146,14 +146,27 @@ function DetailPage({ mediaType, mediaId }) {
     window.location.href = `/player.html?type=${mediaType}&id=${mediaId}&title=${epTitle}&src=${encodeURIComponent(src)}&season=${seasonNum}&episode=${episodeNum}&totalEpisodes=${totalEpisodes}&${idParam}&poster=${posterP}&backdrop=${backdropP}&tone=${toneP}&genre=${genreP}${soParam}`;
   }
 
-  async function loadSimilar(type) {
-    try{
+  async function loadSimilar(type, id) {
+    try {
+      // TMDB's actual recommendation engine (cast/keyword/collection-aware),
+      // not just "whatever's popular right now" — that was the bug: this used
+      // to hit the generic /movies /tv /anime home-page endpoints, which
+      // ignored the current item entirely.
+      const tmdbType = type === 'anime' ? 'tv' : type;
+      const r = await fetch(`${window.API_BASE_URL}/recommendations/${tmdbType}/${id}`);
+      const d = await r.json();
+      if (d.success && d.data && d.data.length > 0) {
+        setSimilar(d.data.slice(0, 8));
+        return;
+      }
+      // Recommendations can legitimately come back empty for obscure/new
+      // titles TMDB hasn't built a recommendation graph for yet — fall back
+      // to the general catalog rather than showing an empty section.
       let endpoint = '/movies';
       if (type === 'tv') endpoint = '/tv';
       else if (type === 'anime') endpoint = '/anime';
-
       const data = await window.fetchWithCache(endpoint);
-      setSimilar(data.slice(0, 8)); // Get 8 similar items
+      setSimilar(data.slice(0, 8));
     } catch (error) {
       console.error('Failed to load similar:', error);
     }

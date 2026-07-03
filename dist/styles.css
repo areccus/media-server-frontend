@@ -745,6 +745,10 @@ html.compact .episode-still { width: 110px; }
 .search-section { }
 .search-section-title { font-size: clamp(19px, 1.5vw, 24px); font-weight: 700; margin: 0 0 20px; }
 .search-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+/* .card--portrait normally sizes itself (clamp based on viewport width) for
+   horizontal-scroll rails; inside this wrapping grid it should fill its
+   track instead so spacing lines up evenly with the grid's own gap/columns. */
+.search-grid .card--portrait { width: 100%; }
 .search-section__more { display: block; width: 100%; margin-top: 16px; padding: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); border-radius: 10px; font: inherit; font-size: 14px; color: var(--muted); cursor: pointer; transition: .15s; }
 .search-section__more:hover { background: rgba(255,255,255,.08); }
 

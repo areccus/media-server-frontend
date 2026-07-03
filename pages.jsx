@@ -118,7 +118,7 @@ function SearchPage() {
         </div>
         <div className="search-grid">
           {visible.map(item => (
-            <CategoryCard key={item.id} item={item} glowMode="tone" glowIntensity={1.7} cardRadius={21} />
+            <PortraitCard key={item.id} item={item} onOpen={goToItem} />
           ))}
         </div>
       </div>
