@@ -146,7 +146,13 @@ img { max-width: 100%; display: block; }
   padding: clamp(20px, 2.4vw, 34px) clamp(20px, 3.4vw, 56px);
 }
 .topnav--sticky {
-  position: sticky; top: 0; z-index: 50;
+  /* position:sticky doesn't work here — .app has overflow:hidden (clips
+     decorative glow/ambient elements elsewhere), and any ancestor with
+     overflow other than visible breaks sticky's scroll-tracking. Fixed
+     positioning sidesteps that entirely and is how Netflix's own header
+     actually works: it overlays the full-bleed hero image underneath it,
+     so no compensating top-padding is needed on the hero/stage below. */
+  position: fixed; top: 0; left: 0; right: 0; z-index: 50;
   background: rgba(10,11,13,.88);
   backdrop-filter: blur(14px) saturate(130%);
   border-bottom: 1px solid var(--line);

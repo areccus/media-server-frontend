@@ -3633,6 +3633,8 @@ function TopNav({ tab, setTab, sticky }) {
         ))}
       </nav>
       <div className="nav-right">
+        <button className="icon-btn" aria-label="library"
+          onClick={() => window.navigate('library')}>{Icon.lib}</button>
         <button className="icon-btn" aria-label="search"
           onClick={() => window.navigate('search')}>{Icon.search}</button>
         <button className="icon-btn" aria-label="alerts">{Icon.bell}</button>
@@ -4577,7 +4579,7 @@ function App() {
           setHeroIdx={setHeroIdx}
           paused={heroPaused}
           setPaused={setHeroPaused}
-          nav={<TopNav tab={tab} setTab={handleTabChange}/>}/>
+          nav={<TopNav tab={tab} setTab={handleTabChange} sticky/>}/>
         <div className="rails" key={tab}>
           {tab === 'kids' ? (
             <div className="coming-soon">

@@ -683,7 +683,7 @@ function App() {
           setHeroIdx={setHeroIdx}
           paused={heroPaused}
           setPaused={setHeroPaused}
-          nav={<TopNav tab={tab} setTab={handleTabChange}/>}/>
+          nav={<TopNav tab={tab} setTab={handleTabChange} sticky/>}/>
         <div className="rails" key={tab}>
           {tab === 'kids' ? (
             <div className="coming-soon">

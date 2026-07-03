@@ -325,6 +325,8 @@ function TopNav({ tab, setTab, sticky }) {
         ))}
       </nav>
       <div className="nav-right">
+        <button className="icon-btn" aria-label="library"
+          onClick={() => window.navigate('library')}>{Icon.lib}</button>
         <button className="icon-btn" aria-label="search"
           onClick={() => window.navigate('search')}>{Icon.search}</button>
         <button className="icon-btn" aria-label="alerts">{Icon.bell}</button>
