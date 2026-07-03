@@ -627,7 +627,7 @@ function App() {
       <React.Fragment>
         <div id="bg" ref={bgRef} style={{display:'none'}}/>
         <div className="app">
-          <TopNav tab={tab} setTab={handleTabChange} sticky={true}/>
+          <TopNav tab={tab} setTab={handleTabChange}/>
           <main className="inner-page">
             {route.page === 'detail' && route.params
               ? <DetailPage key={`${route.params.mediaType}_${route.params.mediaId}`} mediaType={route.params.mediaType} mediaId={route.params.mediaId}/>
@@ -640,6 +640,7 @@ function App() {
           </main>
           <BottomBar active={mobileScreen} onNav={handleMobileNav}/>
         </div>
+        <BackToTopButton/>
         <TweaksPanel>
           <TweakSection label="Style"/>
           <TweakSlider label="Glow intensity" value={t.glowStrength} min={0} max={2} step={0.05}
@@ -683,7 +684,7 @@ function App() {
           setHeroIdx={setHeroIdx}
           paused={heroPaused}
           setPaused={setHeroPaused}
-          nav={<TopNav tab={tab} setTab={handleTabChange} sticky/>}/>
+          nav={<TopNav tab={tab} setTab={handleTabChange}/>}/>
         <div className="rails" key={tab}>
           {tab === 'kids' ? (
             <div className="coming-soon">
@@ -702,6 +703,7 @@ function App() {
         </div>
         <BottomBar active={mobileScreen} onNav={handleMobileNav}/>
       </div>
+      <BackToTopButton/>
       <TweaksPanel>
         <TweakSection label="Style"/>
         <TweakSlider label="Glow intensity" value={t.glowStrength} min={0} max={2} step={0.05}

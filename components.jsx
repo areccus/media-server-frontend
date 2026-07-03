@@ -312,21 +312,25 @@ function GenreCatCard({ genre, mediaType, backdrop, isActive, onClick }) {
   );
 }
 
+// Desktop top nav only — Library is a real routed page, not a `tab` sub-view
+// like Movies/TV/Anime/etc., so it isn't added to the shared TABS constant
+// (that would also put a redundant chip in MobileTop, which already has
+// Library in its own bottom bar).
+const DESKTOP_NAV_TABS = [...TABS, { id: 'library', label: 'Library' }];
+
 function TopNav({ tab, setTab, sticky }) {
   return (
     <div className={'topnav' + (sticky ? ' topnav--sticky' : '')}>
       <div className="brand">HALO</div>
       <nav className="nav-tabs">
-        {TABS.map(t => (
+        {DESKTOP_NAV_TABS.map(t => (
           <button key={t.id} className={t.id === tab ? 'active' : ''}
-            onClick={() => setTab(t.id)}>
+            onClick={() => t.id === 'library' ? window.navigate('library') : setTab(t.id)}>
             {t.label}
           </button>
         ))}
       </nav>
       <div className="nav-right">
-        <button className="icon-btn" aria-label="library"
-          onClick={() => window.navigate('library')}>{Icon.lib}</button>
         <button className="icon-btn" aria-label="search"
           onClick={() => window.navigate('search')}>{Icon.search}</button>
         <button className="icon-btn" aria-label="alerts">{Icon.bell}</button>
@@ -337,6 +341,27 @@ function TopNav({ tab, setTab, sticky }) {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ── Floating "back to top" button — appears after scrolling any page ────── */
+function BackToTopButton() {
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setVisible(window.scrollY > 400);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+  if (!visible) return null;
+  return (
+    <button className="back-to-top-btn" aria-label="Back to top"
+      onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}>
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor"
+        strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="m18 15-6-6-6 6"/>
+      </svg>
+    </button>
   );
 }
 
@@ -581,7 +606,7 @@ Object.assign(window, {
   Top10Card,
   SportTeam, SportCard, LEAGUE_ICONS_MAP,
   HeroBg, Hero,
-  TopNav, MobileTop, BottomBar, TABS, TAB_GENRES, GENRE_GRADIENTS, GenreCatCard,
+  TopNav, MobileTop, BottomBar, BackToTopButton, TABS, TAB_GENRES, GENRE_GRADIENTS, GenreCatCard,
   Row,
   PageSpinner, AmbientBg,
   useBreakpoint, useViewport,
