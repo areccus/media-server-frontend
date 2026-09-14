@@ -1,5 +1,5 @@
 {
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://brochure-lindsay-junction-sunglasses.trycloudflare.com/api/:path*" }
+    { "source": "/api/:path*", "destination": "https://explains-yourself-icq-niagara.trycloudflare.com/api/:path*" }
   ]
 }
