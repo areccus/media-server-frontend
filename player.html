@@ -602,7 +602,7 @@
 <body>
 
 <div id="wrap">
-  <video id="vid" playsinline autoplay muted crossorigin="anonymous"></video>
+  <video id="vid" playsinline autoplay muted></video>
 
   <!-- Buffering -->
   <div id="buf"><div class="spin"></div></div>
@@ -1223,12 +1223,36 @@ vid.addEventListener('canplay', () => bufEl.classList.remove('on'));
 
 // ── Video error handler ───────────────────────────────────────────────────
 let _noCache = false; // true after first nocache retry — prevents infinite loop
+let _forcePassthroughTried = false; // true after retrying an MP4 stream with force_passthrough=1
 vid.addEventListener('error', async () => {
   const e = vid.error;
   const code = e ? e.code : 0;
   const msgs = { 1: 'Load aborted', 2: 'Network error', 3: 'Decode error — codec may be unsupported on this device', 4: 'Format not supported on this device' };
   const detail = msgs[code] || `Media error ${code}`;
   if (activeHls) { activeHls.destroy(); activeHls = null; }
+
+  // Error 4 on a direct MP4 redirect (container=mp4 — not an HLS transcode
+  // session) is very often Real-Debrid's own CDN serving
+  // Content-Type: application/force-download instead of video/mp4, which
+  // AVPlayer (iOS/tvOS/macOS) can refuse to play even though the codec is
+  // completely fine. Retrying the SAME resolved stream with
+  // force_passthrough=1 makes the backend fix the headers itself instead of
+  // redirecting straight to Real-Debrid — costs a little of the server's
+  // bandwidth, so it's only used as a fallback, not the default. No need to
+  // re-resolve the source; the backend simply serves it differently.
+  const _mp4Src = typeof vid.src === 'string' && vid.src.includes('/api/stream/proxy') &&
+    /[?&]container=mp4(&|$)/.test(vid.src);
+  if (code === 4 && _mp4Src && !_forcePassthroughTried) {
+    _forcePassthroughTried = true;
+    const _posBeforeRetry = (vid.currentTime > 4) ? vid.currentTime : _resumeAt;
+    console.warn('vid error 4 on MP4 redirect — retrying with force_passthrough=1');
+    document.getElementById('loading').style.display = 'flex';
+    document.getElementById('load-msg').textContent = 'Preparing stream…';
+    document.getElementById('load-sub').textContent = 'Fixing playback for this device';
+    const sep = vid.src.includes('?') ? '&' : '?';
+    loadStream(vid.src + sep + 'force_passthrough=1', '', _posBeforeRetry, _knownDuration || 0);
+    return;
+  }
 
   // Codes 2/3/4: URL may be stale, or the proxy returned JSON instead of a stream.
   // Re-request with nocache=1 to force a fresh extraction before giving up.
