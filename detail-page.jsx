@@ -509,8 +509,20 @@ function DetailPage({ mediaType, mediaId }) {
               <div className="detail-cast">
                 <h3 className="detail-subsection-title">Cast</h3>
                 <div className="detail-cast-list">
-                  {item.cast.slice(0, 5).map((actor, i) => (
+                  {item.cast.slice(0, 10).map((actor, i) => (
                     <div key={i} className="cast-member">
+                      {actor.profile_path ? (
+                        <img
+                          className="cast-photo"
+                          src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
+                          alt={actor.name}
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="cast-photo cast-photo--fallback" aria-hidden="true">
+                          {actor.name ? actor.name.split(' ').map(p => p[0]).slice(0, 2).join('') : '?'}
+                        </div>
+                      )}
                       <span className="cast-name">{actor.name}</span>
                       <span className="cast-character">{actor.character}</span>
                     </div>

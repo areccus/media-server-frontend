@@ -662,7 +662,8 @@ function App() {
       <React.Fragment>
         <div id="bg" key="bg" ref={bgRef} style={{display:'none'}}/>
         <div className="app" key="app">
-          <TopNav tab={tab} setTab={handleTabChange}/>
+          <TopNav tab={tab} setTab={handleTabChange}
+            activeId={route.page === 'library' ? 'library' : null}/>
           <main className="inner-page">
             {route.page === 'detail' && route.params
               ? <DetailPage key={`${route.params.mediaType}_${route.params.mediaId}`} mediaType={route.params.mediaType} mediaId={route.params.mediaId}/>

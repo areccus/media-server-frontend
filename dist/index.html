@@ -2232,8 +2232,20 @@ function DetailPage({ mediaType, mediaId }) {
               <div className="detail-cast">
                 <h3 className="detail-subsection-title">Cast</h3>
                 <div className="detail-cast-list">
-                  {item.cast.slice(0, 5).map((actor, i) => (
+                  {item.cast.slice(0, 10).map((actor, i) => (
                     <div key={i} className="cast-member">
+                      {actor.profile_path ? (
+                        <img
+                          className="cast-photo"
+                          src={`https://image.tmdb.org/t/p/w185${actor.profile_path}`}
+                          alt={actor.name}
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="cast-photo cast-photo--fallback" aria-hidden="true">
+                          {actor.name ? actor.name.split(' ').map(p => p[0]).slice(0, 2).join('') : '?'}
+                        </div>
+                      )}
                       <span className="cast-name">{actor.name}</span>
                       <span className="cast-character">{actor.character}</span>
                     </div>
@@ -3626,13 +3638,19 @@ function GenreCatCard({ genre, mediaType, backdrop, isActive, onClick }) {
 // Library in its own bottom bar).
 const DESKTOP_NAV_TABS = [...TABS, { id: 'library', label: 'Library' }];
 
-function TopNav({ tab, setTab, sticky }) {
+function TopNav({ tab, setTab, sticky, activeId }) {
+  // activeId lets a caller override which tab is highlighted — needed on
+  // router pages (Search/Detail/Library/History/Genre/Sport) where `tab`
+  // still holds whatever Home tab was last selected and would otherwise
+  // leave "Home" looking highlighted on every other page. Home itself
+  // doesn't pass activeId, so it falls back to the real `tab` state.
+  const highlightId = activeId !== undefined ? activeId : tab;
   return (
     <div className={'topnav' + (sticky ? ' topnav--sticky' : '')}>
       <div className="brand">HALO</div>
       <nav className="nav-tabs">
         {DESKTOP_NAV_TABS.map(t => (
-          <button key={t.id} className={t.id === tab ? 'active' : ''}
+          <button key={t.id} className={t.id === highlightId ? 'active' : ''}
             onClick={() => t.id === 'library' ? window.navigate('library') : setTab(t.id)}>
             {t.label}
           </button>
@@ -4583,7 +4601,8 @@ function App() {
       <React.Fragment>
         <div id="bg" key="bg" ref={bgRef} style={{display:'none'}}/>
         <div className="app" key="app">
-          <TopNav tab={tab} setTab={handleTabChange}/>
+          <TopNav tab={tab} setTab={handleTabChange}
+            activeId={route.page === 'library' ? 'library' : null}/>
           <main className="inner-page">
             {route.page === 'detail' && route.params
               ? <DetailPage key={`${route.params.mediaType}_${route.params.mediaId}`} mediaType={route.params.mediaType} mediaId={route.params.mediaId}/>

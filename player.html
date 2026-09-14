@@ -602,7 +602,7 @@
 <body>
 
 <div id="wrap">
-  <video id="vid" playsinline autoplay muted></video>
+  <video id="vid" playsinline autoplay muted crossorigin="anonymous"></video>
 
   <!-- Buffering -->
   <div id="buf"><div class="spin"></div></div>
@@ -846,6 +846,7 @@ const mediaType = P.get('type');
 const mediaId   = P.get('id');
 const titleRaw  = P.get('title') || 'Video';
 const embedSrc  = P.get('src');
+let _lastStreamError = null;  // last structured {error,code,message,sources_tried,fallback_embed} from /api/stream
 const season    = parseInt(P.get('season'))        || 0;
 const episode   = parseInt(P.get('episode'))       || 0;
 const totalEps  = parseInt(P.get('totalEpisodes')) || 0;
@@ -1587,7 +1588,7 @@ function startEmbedPulse() {
 }
 
 function useEmbed() {
-  const src = embedSrc || buildVidsrcEmbedUrl();
+  const src = embedSrc || _lastStreamError?.fallback_embed || buildVidsrcEmbedUrl();
   if (!src) { goBack(); return; }
   document.getElementById('err').style.display     = 'none';
   document.getElementById('loading').style.display = 'none';
@@ -1885,17 +1886,28 @@ async function init() {
     ]);
 
     // Guard against non-JSON responses (Cloudflare error pages, tunnel down, etc.)
+    // but still parse the body on a non-2xx when it IS json — the backend's
+    // 404 "no_stream" response carries a real message/fallback_embed/sources_tried
+    // that would otherwise be thrown away unread.
     const ct = res.headers.get('content-type') || '';
-    if (!res.ok || !ct.includes('json')) {
+    let data = null;
+    if (ct.includes('json')) {
+      try { data = await res.json(); } catch (_) { data = null; }
+    }
+    if (!res.ok) {
+      if (data && (data.code === 'no_source' || data.error === 'no_stream')) {
+        _lastStreamError = data;
+        throw new Error('NO_SOURCE');
+      }
       if (res.status === 504 || res.status === 524) throw new Error('TIMEOUT');
       if (res.status === 503 || res.status === 502) throw new Error('BACKEND_DOWN');
       throw new Error(`Server returned ${res.status}`);
     }
-    const data = await res.json();
+    if (!data) throw new Error('Server returned an unexpected response');
 
     if (!data.success || !data.data?.stream_url) {
       const code = data.code || '';
-      if (code === 'no_source') throw new Error('NO_SOURCE');
+      if (code === 'no_source') { _lastStreamError = data; throw new Error('NO_SOURCE'); }
       throw new Error(data.error || 'No stream URL returned');
     }
 
@@ -1928,17 +1940,14 @@ async function init() {
 
   } catch (err) {
     console.error('Extraction failed:', err);
-    // 500 = backend couldn't find any working stream (DMCA stubs, no rips yet, etc.)
-    // Auto-fall back to the VidSrc embed silently rather than showing an error screen.
-    if (embedSrc && (err.message.includes('500') || err.message === 'NO_SOURCE' || err.name === 'TimeoutError')) {
-      console.log('No streams found — auto-falling back to VidSrc embed');
-      useEmbed();
-      return;
-    }
+    // Never silently swap to the embed — the user should always see why
+    // Real-Debrid didn't work and choose, not have it happen behind their back.
     if (err.name === 'TimeoutError') {
       showError('Stream extraction timed out.\n\nTry again or use the VidSrc button above.');
     } else if (err.message === 'NO_SOURCE') {
-      showError('No sources found for this title.\n\nIt may not be available yet — try again in a moment.');
+      const backendMsg = _lastStreamError?.message;
+      showError((backendMsg || 'No sources found for this title.') +
+        '\n\nIt may not be available yet — try again in a moment.');
     } else if (err.message === 'TIMEOUT') {
       showError('The server took too long to respond.\n\nThe backend may be busy — try again in a few seconds.');
     } else if (err.message === 'BACKEND_DOWN') {

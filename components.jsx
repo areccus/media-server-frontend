@@ -318,13 +318,19 @@ function GenreCatCard({ genre, mediaType, backdrop, isActive, onClick }) {
 // Library in its own bottom bar).
 const DESKTOP_NAV_TABS = [...TABS, { id: 'library', label: 'Library' }];
 
-function TopNav({ tab, setTab, sticky }) {
+function TopNav({ tab, setTab, sticky, activeId }) {
+  // activeId lets a caller override which tab is highlighted — needed on
+  // router pages (Search/Detail/Library/History/Genre/Sport) where `tab`
+  // still holds whatever Home tab was last selected and would otherwise
+  // leave "Home" looking highlighted on every other page. Home itself
+  // doesn't pass activeId, so it falls back to the real `tab` state.
+  const highlightId = activeId !== undefined ? activeId : tab;
   return (
     <div className={'topnav' + (sticky ? ' topnav--sticky' : '')}>
       <div className="brand">HALO</div>
       <nav className="nav-tabs">
         {DESKTOP_NAV_TABS.map(t => (
-          <button key={t.id} className={t.id === tab ? 'active' : ''}
+          <button key={t.id} className={t.id === highlightId ? 'active' : ''}
             onClick={() => t.id === 'library' ? window.navigate('library') : setTab(t.id)}>
             {t.label}
           </button>
