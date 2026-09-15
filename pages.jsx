@@ -14,48 +14,21 @@ function SearchPage() {
   const [results, setResults]           = useState({ movies: [], tv: [], total: 0 });
   const [loading, setLoading]           = useState(false);
   const [searched, setSearched]         = useState(false);
-  const [showSuggest, setShowSuggest]   = useState(false);
-  const [suggestIdx, setSuggestIdx]     = useState(-1);
   const [moviesExpanded, setMoviesExp]  = useState(false);
   const [tvExpanded, setTvExp]          = useState(false);
   const inputRef    = useRef(null);
-  const wrapperRef  = useRef(null);
   const debounceRef = useRef(null);
-
-  // Build suggestion list from current results (interleaved, max 8)
-  const suggestions = React.useMemo(() => {
-    const mvs = results.movies.slice(0, 5).map(i => ({ ...i, _kind: 'Movie' }));
-    const tvs = results.tv.slice(0, 5).map(i => ({ ...i, _kind: 'TV' }));
-    const merged = [];
-    const len = Math.max(mvs.length, tvs.length);
-    for (let i = 0; i < len; i++) {
-      if (mvs[i]) merged.push(mvs[i]);
-      if (tvs[i]) merged.push(tvs[i]);
-    }
-    return merged.slice(0, 8);
-  }, [results]);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    function onDown(e) {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
-        setShowSuggest(false);
-      }
-    }
-    document.addEventListener('mousedown', onDown);
-    return () => document.removeEventListener('mousedown', onDown);
-  }, []);
-
-  // Debounced search
+  // Debounced search — the grid below updates live as the user types; there's
+  // no separate autocomplete dropdown, so results only ever live in one place.
   useEffect(() => {
     clearTimeout(debounceRef.current);
     if (!query.trim()) {
       setResults({ movies: [], tv: [], total: 0 });
       setSearched(false);
       setLoading(false);
-      setShowSuggest(false);
       setMoviesExp(false);
       setTvExp(false);
       return;
@@ -66,8 +39,6 @@ function SearchPage() {
       try {
         const data = await window.fetchWithCache(`/search?q=${encodeURIComponent(query)}`);
         setResults(data);
-        setShowSuggest(true);
-        setSuggestIdx(-1);
         setMoviesExp(false);
         setTvExp(false);
       } catch {
@@ -85,18 +56,9 @@ function SearchPage() {
   }
 
   function onKeyDown(e) {
-    if (!showSuggest || suggestions.length === 0) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setSuggestIdx(i => Math.min(i + 1, suggestions.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setSuggestIdx(i => Math.max(i - 1, -1));
-    } else if (e.key === 'Enter' && suggestIdx >= 0) {
-      e.preventDefault();
-      goToItem(suggestions[suggestIdx]);
-    } else if (e.key === 'Escape') {
-      setShowSuggest(false);
+    if (e.key === 'Escape') {
+      setQuery('');
+      inputRef.current?.blur();
     }
   }
 
@@ -138,7 +100,7 @@ function SearchPage() {
       </div>
 
       <form className="search-form" onSubmit={e => e.preventDefault()}>
-        <div className="search-input-wrapper" ref={wrapperRef}>
+        <div className="search-input-wrapper">
           <svg className="search-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <circle cx="11" cy="11" r="8"/>
             <path d="m21 21-4.35-4.35"/>
@@ -150,18 +112,9 @@ function SearchPage() {
             placeholder="Movies, shows, anime..."
             value={query}
             onChange={e => setQuery(e.target.value)}
-            onFocus={() => suggestions.length > 0 && setShowSuggest(true)}
             onKeyDown={onKeyDown}
             autoComplete="off"
           />
-          {query && (
-            <button type="button" className="search-clear"
-              onClick={() => { setQuery(''); setShowSuggest(false); inputRef.current?.focus(); }}>
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                <path d="M18 6 6 18M6 6l12 12"/>
-              </svg>
-            </button>
-          )}
           {loading && (
             <div className="search-spinner">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
@@ -172,49 +125,37 @@ function SearchPage() {
               </svg>
             </div>
           )}
-
-          {/* Autocomplete dropdown */}
-          {showSuggest && suggestions.length > 0 && (
-            <div className="search-suggest">
-              {suggestions.map((item, idx) => {
-                const thumbSrc = item.poster
-                  ? `https://image.tmdb.org/t/p/w92${item.poster}`
-                  : (item.backdrop ? `https://image.tmdb.org/t/p/w300${item.backdrop}` : null);
-                return (
-                  <div
-                    key={item.id + idx}
-                    className={'search-suggest__item' + (idx === suggestIdx ? ' is-active' : '')}
-                    onMouseEnter={() => setSuggestIdx(idx)}
-                    onMouseDown={e => { e.preventDefault(); goToItem(item); }}
-                  >
-                    <div className="search-suggest__thumb">
-                      {thumbSrc
-                        ? <img src={thumbSrc} alt="" draggable="false" />
-                        : <div className="search-suggest__thumb-ph" />}
-                    </div>
-                    <div className="search-suggest__info">
-                      <span className="search-suggest__title">{item.title}</span>
-                      {item.year && <span className="search-suggest__year">{item.year}</span>}
-                    </div>
-                    <span className="search-suggest__badge">{item._kind}</span>
-                  </div>
-                );
-              })}
-            </div>
+          {!loading && query && (
+            <button type="button" className="search-clear"
+              onClick={() => { setQuery(''); inputRef.current?.focus(); }}>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M18 6 6 18M6 6l12 12"/>
+              </svg>
+            </button>
           )}
         </div>
       </form>
 
+      {!searched && (
+        <div className="search-idle">
+          <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+            <circle cx="11" cy="11" r="8"/>
+            <path d="m21 21-4.35-4.35"/>
+          </svg>
+          <p>Search movies, shows, and anime</p>
+        </div>
+      )}
+
       {!loading && searched && results.total === 0 && (
         <div className="search-empty">
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>😕</div>
-          <div style={{ fontSize: '18px', marginBottom: '8px' }}>No results found</div>
-          <div style={{ fontSize: '14px', color: 'var(--txt-1)' }}>Try different keywords</div>
+          <div className="search-empty__icon">😕</div>
+          <div className="search-empty__title">No results found</div>
+          <div className="search-empty__sub">Try different keywords</div>
         </div>
       )}
 
       {results.total > 0 && (
-        <div className="search-results" onClick={() => setShowSuggest(false)}>
+        <div className="search-results">
           {results.movies.length > 0 && (
             <SectionCards
               items={results.movies}
