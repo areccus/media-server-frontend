@@ -100,7 +100,7 @@ img { max-width: 100%; display: block; }
   filter: blur(50px) brightness(.42) saturate(1.25);
   transform: scale(1.12);
   transition: background-image .8s var(--ease);
-  z-index: 0;
+  z-index: 1;
 }
 #bg::after {
   content: ""; position: absolute; inset: 0;
@@ -109,7 +109,7 @@ img { max-width: 100%; display: block; }
 
 /* ── Floating app shell ──────────────────────────────────────────────────── */
 .app {
-  position: relative; z-index: 1;
+  position: relative; z-index: 2;
   /* Solid through 260px — covers TopNav (no background of its own) AND every
      non-hero page's own <h1>/subtitle (.search-header/.library-header/
      .genre-header, plus the first row title, all sit in this range — see
@@ -526,9 +526,16 @@ html.compact {
   z-index: 1;
 }
 
-/* ── Ambient background (legacy, hidden behind #bg now) ──────────────────── */
+/* ── Ambient background (sits behind #bg + .app) ──────────────────────────── */
 .ambient {
-  position: fixed; inset: 0; z-index: -1;
+  /* z-index: 0, not -1 — a fixed element with a negative z-index and no
+     positioned ancestor is a known real-device WebKit trouble spot: iOS
+     Safari has painted the body/html canvas background on top of negative
+     z-index boxes in cases Chrome (incl. headless, used to verify this
+     feature) renders correctly. Since this is already the first thing in
+     the DOM, 0/1/2 (ambient/#bg/.app below) gets the same visual stacking
+     without relying on negative values at all. */
+  position: fixed; inset: 0; z-index: 0;
   pointer-events: none; overflow: hidden;
   background: linear-gradient(180deg, #141620 0%, #0a0b0d 100%);
 }
