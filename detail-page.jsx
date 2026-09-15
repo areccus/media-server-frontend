@@ -62,12 +62,6 @@ function DetailPage({ mediaType, mediaId }) {
     checkInList();
   }, [mediaType, mediaId]);
 
-  // Tint the ambient background to this title's own tone rather than
-  // leaving whatever Home's hero last set — same --glow var Home uses.
-  useEffect(() => {
-    if (item?.tone) document.documentElement.style.setProperty('--glow', item.tone);
-  }, [item?.tone]);
-
   // Fetch trailer, then after 5 s: autoplay in banner (desktop) or show button (iOS)
   useEffect(() => {
     if (!mediaId) return;

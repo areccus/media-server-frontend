@@ -110,18 +110,14 @@ img { max-width: 100%; display: block; }
 /* ── Floating app shell ──────────────────────────────────────────────────── */
 .app {
   position: relative; z-index: 2;
-  /* Solid through 260px — covers TopNav (no background of its own) AND every
-     non-hero page's own <h1>/subtitle (.search-header/.library-header/
-     .genre-header, plus the first row title, all sit in this range — see
-     their own CSS). Below that, eases to 55% opacity so .ambient (behind
-     everything, see AmbientBg) reads as real color through the gaps
-     between rows — the reference look the user approved has an obviously
-     visible red/blue wash back there, not a faint hint, so this needs a
-     lot more bleed-through than a token amount. Row/section titles
-     (.section-title etc.) are bold ≥19px, which is WCAG "large text" —
-     3:1 floor, not 4.5:1 — and verified via real rendered screenshots at
-     this value (see amb-blob comments for the color choices). */
-  background: linear-gradient(180deg, var(--bg) 0px, var(--bg) 260px, rgba(10,11,13,.42) 420px, rgba(10,11,13,.42) 100%);
+  /* Flat/opaque again — the ambient ".ambient"/AmbientBg system (further
+     down this file) got built out into a real, visible feature behind
+     this in one session, then pulled back off by request: cool for a
+     while, but not something to force on everyone permanently. Left
+     .ambient/.amb-blob and <AmbientBg> completely intact (just unmounted
+     in app.jsx) so this can come back as a selectable theme later without
+     redoing the color/contrast work. */
+  background: var(--bg);
   overflow: hidden;
   isolation: isolate;
   min-height: 100vh;
@@ -143,14 +139,6 @@ img { max-width: 100%; display: block; }
 .stage__scrim {
   position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background:
-    /* Colored washes here (an earlier version) were reverted per feedback —
-       the hero should stay a neutral, subtle grey/blur-like scrim, not
-       carry the ambient blue/red. This soft highlight has no hue at all,
-       just a touch of lift so the top of the hero doesn't look completely
-       flat. Stays clear of the title/meta/button zone at the bottom, which
-       keeps every WCAG contrast measurement already made on that zone
-       unaffected. */
-    radial-gradient(90% 65% at 65% 0%, rgba(255,255,255,.05) 0%, transparent 72%),
     linear-gradient(90deg, rgba(8,9,11,.92) 0%, rgba(8,9,11,.62) 32%, rgba(8,9,11,.10) 62%, rgba(8,9,11,0) 100%),
     linear-gradient(0deg, var(--bg) 1%, rgba(10,11,13,.55) 26%, rgba(10,11,13,0) 56%);
 }
@@ -482,7 +470,6 @@ html.compact {
   .stage__bg img { object-fit: cover; object-position: center center; }
   .stage__scrim {
     background:
-      radial-gradient(100% 40% at 65% 0%, rgba(255,255,255,.05) 0%, transparent 72%),
       linear-gradient(0deg, var(--bg) 2%, rgba(10,11,13,.45) 40%, rgba(10,11,13,0) 78%),
       linear-gradient(90deg, rgba(8,9,11,.55), rgba(8,9,11,.1));
   }
