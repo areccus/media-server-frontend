@@ -143,19 +143,14 @@ img { max-width: 100%; display: block; }
 .stage__scrim {
   position: absolute; inset: 0; z-index: 1; pointer-events: none;
   background:
-    /* Ambient personality on the hero itself — the poster image is a fully
-       opaque <img>, so .ambient behind it has nothing to bleed through
-       until a viewer scrolls past the hero. Same fixed blue/red as
-       .amb-blob (not tied to the title's own tone — picked once from the
-       reference screenshot, kept consistent everywhere) in the scrim's
-       upper half, which is otherwise fully transparent (raw photo).
-       Plain radial-gradients, not a blend mode + filter combo — those have
-       real WebKit-only compositing bugs (see .ambient's z-index comment
-       below) and this doesn't need either. Both stay clear of the
-       title/meta/button zone at the bottom, which keeps every WCAG
-       contrast measurement already made on that zone unaffected. */
-    radial-gradient(80% 62% at 84% 4%, rgba(224,28,58,.6) 0%, transparent 78%),
-    radial-gradient(60% 48% at 8% 2%, rgba(45,75,255,.6) 0%, transparent 75%),
+    /* Colored washes here (an earlier version) were reverted per feedback —
+       the hero should stay a neutral, subtle grey/blur-like scrim, not
+       carry the ambient blue/red. This soft highlight has no hue at all,
+       just a touch of lift so the top of the hero doesn't look completely
+       flat. Stays clear of the title/meta/button zone at the bottom, which
+       keeps every WCAG contrast measurement already made on that zone
+       unaffected. */
+    radial-gradient(90% 65% at 65% 0%, rgba(255,255,255,.05) 0%, transparent 72%),
     linear-gradient(90deg, rgba(8,9,11,.92) 0%, rgba(8,9,11,.62) 32%, rgba(8,9,11,.10) 62%, rgba(8,9,11,0) 100%),
     linear-gradient(0deg, var(--bg) 1%, rgba(10,11,13,.55) 26%, rgba(10,11,13,0) 56%);
 }
@@ -487,8 +482,7 @@ html.compact {
   .stage__bg img { object-fit: cover; object-position: center center; }
   .stage__scrim {
     background:
-      radial-gradient(100% 46% at 74% 2%, rgba(224,28,58,.65) 0%, transparent 76%),
-      radial-gradient(75% 36% at 4% 0%, rgba(45,75,255,.65) 0%, transparent 78%),
+      radial-gradient(100% 40% at 65% 0%, rgba(255,255,255,.05) 0%, transparent 72%),
       linear-gradient(0deg, var(--bg) 2%, rgba(10,11,13,.45) 40%, rgba(10,11,13,0) 78%),
       linear-gradient(90deg, rgba(8,9,11,.55), rgba(8,9,11,.1));
   }
@@ -558,25 +552,30 @@ html.compact {
 .ambient--aurora .amb-blob--1 {
   /* Fixed blue, not content-driven — picked (with .amb-blob--2's red) by
      eyedropping the exact reference screenshot the user approved, rather
-     than tying to whatever title happens to be featured. */
-  width: 75vmax; height: 75vmax; top: -25vmax; left: -15vmax;
-  background: radial-gradient(closest-side, rgba(45,75,255,.75), transparent 75%);
-  opacity: calc(1 * var(--amb-intensity, 1));
-  animation: floatA 22s ease-in-out infinite;
+     than tying to whatever title happens to be featured. Smaller than red
+     on purpose — first pass had blue dominating the mix; this keeps it a
+     clean corner presence for the top-left end of the diagonal. */
+  width: 58vmax; height: 58vmax; top: -22vmax; left: -14vmax;
+  background: radial-gradient(closest-side, rgba(45,75,255,.7), transparent 75%);
+  opacity: calc(.85 * var(--amb-intensity, 1));
+  animation: floatA 24s ease-in-out infinite;
 }
 .ambient--aurora .amb-blob--2 {
-  width: 60vmax; height: 60vmax; bottom: -22vmax; right: -18vmax;
-  background: radial-gradient(closest-side, rgba(224,28,58,.7), transparent 75%);
+  /* Bigger and pushed further up than blue, reaching further along the
+     diagonal from its bottom-right origin rather than staying pinned in
+     the corner. */
+  width: 78vmax; height: 78vmax; bottom: -14vmax; right: -20vmax;
+  background: radial-gradient(closest-side, rgba(224,28,58,.72), transparent 75%);
   opacity: calc(1 * var(--amb-intensity, 1));
   animation: floatB 26s ease-in-out infinite;
 }
 .ambient--aurora .amb-blob--accent {
-  /* Violet bridge blob between the blue and red — the reference screenshot
-     has a purple transition zone where they meet, not a hard blue/red
-     seam. Sits between the other two (top-right) for exactly that. */
-  width: 70vmax; height: 70vmax; top: 5vmax; right: -5vmax;
-  background: radial-gradient(closest-side, rgba(150,50,190,.6), transparent 70%);
-  opacity: calc(.75 * var(--amb-intensity, 1));
+  /* Faint violet bridge only — kept just enough to soften the seam where
+     blue and red meet along the diagonal, without reading as a third
+     distinct color/corner. */
+  width: 60vmax; height: 60vmax; top: 15vmax; right: 5vmax;
+  background: radial-gradient(closest-side, rgba(150,50,190,.5), transparent 70%);
+  opacity: calc(.3 * var(--amb-intensity, 1));
   animation: floatD 24s ease-in-out infinite;
 }
 @keyframes floatA { 0%,100% { transform: translate3d(0,0,0) scale(1); } 33% { transform: translate3d(10vmax,4vmax,0) scale(1.1); } 66% { transform: translate3d(4vmax,8vmax,0) scale(1.18); } }
