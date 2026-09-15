@@ -660,6 +660,7 @@ function App() {
   if (route.page && route.page !== 'home' && routerPages[route.page]) {
     return (
       <React.Fragment>
+        <AmbientBg key="ambient" variant="aurora" accentColor="var(--glow)"/>
         <div id="bg" key="bg" ref={bgRef} style={{display:'none'}}/>
         <div className="app" key="app">
           <TopNav tab={tab} setTab={handleTabChange}
@@ -701,6 +702,7 @@ function App() {
   /* ── Main home/tab view ──── */
   return (
     <React.Fragment>
+      <AmbientBg key="ambient" variant="aurora" accentColor="var(--glow)"/>
       {rdWarning && (
         <div key="rdwarning" style={{
           position:'fixed', top:0, left:0, right:0, zIndex:9999,
