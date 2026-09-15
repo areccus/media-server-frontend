@@ -539,7 +539,7 @@ const _IS_TOUCH = ('ontouchstart' in window) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 /* ── Portrait card with trailer hover (desktop) + download badge ─────────── */
-function PortraitCard({ item, onOpen }) {
+function PortraitCard({ item, onOpen, showLabel }) {
   const s = useSheen();
   const src = posterUrl(item);
   const [trailerKey, setTrailerKey] = useState(null);
@@ -600,6 +600,16 @@ function PortraitCard({ item, onOpen }) {
         <div className="card__gloss"></div>
       </div>
       <div className="card__glow"></div>
+      {showLabel && (
+        /* Poster art usually has its own title baked in, which is enough on
+           Home's curated rows — but search surfaces far more obscure/foreign
+           titles where the art alone isn't identifiable, and a broken/missing
+           poster leaves the card with literally no text at all. */
+        <div className="portrait-caption">
+          <div className="t">{item.title}</div>
+          <div className="s">{item.year}</div>
+        </div>
+      )}
     </div>
   );
 }

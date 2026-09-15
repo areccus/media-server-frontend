@@ -379,6 +379,16 @@ img { max-width: 100%; display: block; }
 .card--portrait { width: clamp(150px, 12vw, 196px); }
 .card--portrait .card__inner { aspect-ratio: 2/3; }
 .card--portrait .card__glow { left: 6%; right: 6%; }
+/* Opt-in text caption (search results — see PortraitCard's showLabel prop).
+   Home's poster rows rely on the poster art's own baked-in title and don't
+   render this, so it doesn't change their look. */
+.portrait-caption { padding: 8px 2px 0; }
+.portrait-caption .t {
+  font-size: 14px; font-weight: 600; line-height: 1.25;
+  color: var(--text);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.portrait-caption .s { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
 
 /* ── Landscape card ──────────────────────────────────────────────────────── */
 .card--land { width: clamp(228px, 19vw, 288px); }

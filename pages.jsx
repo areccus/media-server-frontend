@@ -80,7 +80,7 @@ function SearchPage() {
         </div>
         <div className="search-grid">
           {visible.map(item => (
-            <PortraitCard key={item.id} item={item} onOpen={goToItem} />
+            <PortraitCard key={item.id} item={item} onOpen={goToItem} showLabel/>
           ))}
         </div>
       </div>
