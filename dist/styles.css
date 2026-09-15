@@ -113,19 +113,15 @@ img { max-width: 100%; display: block; }
   /* Solid through 260px — covers TopNav (no background of its own) AND every
      non-hero page's own <h1>/subtitle (.search-header/.library-header/
      .genre-header, plus the first row title, all sit in this range — see
-     their own CSS). Below that, eases to 82% opacity so .ambient (behind
-     everything, see AmbientBg) tints through in the gaps between rows.
-     Chosen from real measurement, not eyeballed: an early looser version
-     (140px solid / 72% floor) measured a WCAG failure — 2.87:1 — right
-     under a page heading. Worked back up from there with a worst-case
-     simulation (max-bright forced accent color, all three blobs
-     overlapping via their actual screen blend mode, +30% intensity
-     headroom for a future tweaks slider) — 82% floor holds ≥4.9:1 even in
-     that stacked worst case, comfortably above the 3:1 floor WCAG sets for
-     large text/UI components. On Home this is moot below the fold anyway:
-     the hero's own opaque artwork covers this whole range regardless of
-     what's behind it. */
-  background: linear-gradient(180deg, var(--bg) 0px, var(--bg) 260px, rgba(10,11,13,.82) 420px, rgba(10,11,13,.82) 100%);
+     their own CSS). Below that, eases to 55% opacity so .ambient (behind
+     everything, see AmbientBg) reads as real color through the gaps
+     between rows — the reference look the user approved has an obviously
+     visible red/blue wash back there, not a faint hint, so this needs a
+     lot more bleed-through than a token amount. Row/section titles
+     (.section-title etc.) are bold ≥19px, which is WCAG "large text" —
+     3:1 floor, not 4.5:1 — and verified via real rendered screenshots at
+     this value (see amb-blob comments for the color choices). */
+  background: linear-gradient(180deg, var(--bg) 0px, var(--bg) 260px, rgba(10,11,13,.42) 420px, rgba(10,11,13,.42) 100%);
   overflow: hidden;
   isolation: isolate;
   min-height: 100vh;
@@ -149,19 +145,17 @@ img { max-width: 100%; display: block; }
   background:
     /* Ambient personality on the hero itself — the poster image is a fully
        opaque <img>, so .ambient behind it has nothing to bleed through
-       until a viewer scrolls past the hero. These two washes put real,
-       visible color into the scrim's upper half, which is otherwise fully
-       transparent (raw photo): a big one in --glow (the same accent each
-       hero item already sets, see app.jsx) top-right, and a fixed violet
-       one top-left echoing .ambient's own aurora blobs, so the hero reads
-       as part of the same ambient system instead of a subtler hint of it.
+       until a viewer scrolls past the hero. Same fixed blue/red as
+       .amb-blob (not tied to the title's own tone — picked once from the
+       reference screenshot, kept consistent everywhere) in the scrim's
+       upper half, which is otherwise fully transparent (raw photo).
        Plain radial-gradients, not a blend mode + filter combo — those have
        real WebKit-only compositing bugs (see .ambient's z-index comment
        below) and this doesn't need either. Both stay clear of the
        title/meta/button zone at the bottom, which keeps every WCAG
        contrast measurement already made on that zone unaffected. */
-    radial-gradient(80% 62% at 84% 4%, color-mix(in srgb, var(--glow, #2f86ff) 65%, transparent) 0%, transparent 78%),
-    radial-gradient(60% 48% at 8% 2%, rgba(130,90,220,.55) 0%, transparent 75%),
+    radial-gradient(80% 62% at 84% 4%, rgba(224,28,58,.6) 0%, transparent 78%),
+    radial-gradient(60% 48% at 8% 2%, rgba(45,75,255,.6) 0%, transparent 75%),
     linear-gradient(90deg, rgba(8,9,11,.92) 0%, rgba(8,9,11,.62) 32%, rgba(8,9,11,.10) 62%, rgba(8,9,11,0) 100%),
     linear-gradient(0deg, var(--bg) 1%, rgba(10,11,13,.55) 26%, rgba(10,11,13,0) 56%);
 }
@@ -493,8 +487,8 @@ html.compact {
   .stage__bg img { object-fit: cover; object-position: center center; }
   .stage__scrim {
     background:
-      radial-gradient(100% 46% at 74% 2%, color-mix(in srgb, var(--glow, #2f86ff) 62%, transparent) 0%, transparent 76%),
-      radial-gradient(75% 36% at 4% 0%, rgba(130,90,220,.5) 0%, transparent 78%),
+      radial-gradient(100% 46% at 74% 2%, rgba(224,28,58,.65) 0%, transparent 76%),
+      radial-gradient(75% 36% at 4% 0%, rgba(45,75,255,.65) 0%, transparent 78%),
       linear-gradient(0deg, var(--bg) 2%, rgba(10,11,13,.45) 40%, rgba(10,11,13,0) 78%),
       linear-gradient(90deg, rgba(8,9,11,.55), rgba(8,9,11,.1));
   }
@@ -562,25 +556,27 @@ html.compact {
   transition: background-color 1.6s ease; will-change: transform;
 }
 .ambient--aurora .amb-blob--1 {
+  /* Fixed blue, not content-driven — picked (with .amb-blob--2's red) by
+     eyedropping the exact reference screenshot the user approved, rather
+     than tying to whatever title happens to be featured. */
   width: 75vmax; height: 75vmax; top: -25vmax; left: -15vmax;
-  background: radial-gradient(closest-side, rgba(100,80,200,.4), transparent 75%);
-  opacity: calc(.85 * var(--amb-intensity, 1));
+  background: radial-gradient(closest-side, rgba(45,75,255,.75), transparent 75%);
+  opacity: calc(1 * var(--amb-intensity, 1));
   animation: floatA 22s ease-in-out infinite;
 }
 .ambient--aurora .amb-blob--2 {
   width: 60vmax; height: 60vmax; bottom: -22vmax; right: -18vmax;
-  background: radial-gradient(closest-side, rgba(160,80,220,.35), transparent 75%);
-  opacity: calc(.8 * var(--amb-intensity, 1));
+  background: radial-gradient(closest-side, rgba(224,28,58,.7), transparent 75%);
+  opacity: calc(1 * var(--amb-intensity, 1));
   animation: floatB 26s ease-in-out infinite;
 }
 .ambient--aurora .amb-blob--accent {
+  /* Violet bridge blob between the blue and red — the reference screenshot
+     has a purple transition zone where they meet, not a hard blue/red
+     seam. Sits between the other two (top-right) for exactly that. */
   width: 70vmax; height: 70vmax; top: 5vmax; right: -5vmax;
-  background: radial-gradient(closest-side, var(--accent, #5BB7FF), transparent 70%);
-  /* Lower than the other two blobs on purpose: this one's color comes from
-     content (--glow, whatever a title's tone happens to be) rather than a
-     fixed, known-safe hue. .32 was verified safe even in the worst-case
-     simulation described on .app's background above. */
-  opacity: calc(.32 * var(--amb-intensity, 1));
+  background: radial-gradient(closest-side, rgba(150,50,190,.6), transparent 70%);
+  opacity: calc(.75 * var(--amb-intensity, 1));
   animation: floatD 24s ease-in-out infinite;
 }
 @keyframes floatA { 0%,100% { transform: translate3d(0,0,0) scale(1); } 33% { transform: translate3d(10vmax,4vmax,0) scale(1.1); } 66% { transform: translate3d(4vmax,8vmax,0) scale(1.18); } }
