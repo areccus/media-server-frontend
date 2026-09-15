@@ -227,6 +227,42 @@ function DetailPage({ mediaType, mediaId }) {
     }
   }
 
+  async function shareItem() {
+    // Same-origin link into the SPA's own hash route — whoever opens it gets
+    // this exact detail page, no login/profile needed since the API and
+    // everything else on this page is already public to anyone who can
+    // reach the site (unlike the Tailscale-only surfaces).
+    const url = `${window.location.origin}${window.location.pathname}#detail/${mediaType}/${mediaId}`;
+    const shareData = {
+      title: item?.title || 'HALO',
+      text: item?.title ? `Watch ${item.title} on HALO` : 'Watch this on HALO',
+      url,
+    };
+    // navigator.share is the native share sheet (Messages/Mail/etc. on iOS/
+    // Android) — the obvious choice when texting a link to someone. Only
+    // available on HTTPS + mobile-ish contexts, so fall back to copying the
+    // link for desktop browsers that don't have it.
+    if (navigator.share && (!navigator.canShare || navigator.canShare(shareData))) {
+      try {
+        await navigator.share(shareData);
+      } catch (err) {
+        // AbortError = user dismissed the share sheet — not an error.
+        if (err?.name !== 'AbortError') {
+          console.error('Share failed:', err);
+          window.showToast?.('Could not share — try again');
+        }
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(url);
+      window.showToast?.('Link copied!');
+    } catch (err) {
+      console.error('Clipboard write failed:', err);
+      window.showToast?.(url, { duration: 4000 });
+    }
+  }
+
   async function downloadItem(season, episode, epTitle) {
     const key = season ? `s${season}e${episode}` : 'movie';
     if (downloading === key) return;
@@ -435,7 +471,7 @@ function DetailPage({ mediaType, mediaId }) {
                 </svg>
                 {inList ? 'In My List' : 'My List'}
               </button>
-              <button className="btn btn--glass btn--icon btn--large" aria-label="Share">
+              <button className="btn btn--glass btn--icon btn--large" aria-label="Share" onClick={shareItem}>
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                   <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/>
                 </svg>

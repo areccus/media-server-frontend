@@ -774,6 +774,22 @@ html.compact .episode-still { width: 110px; }
 }
 .search-idle svg { opacity: .35; }
 .search-idle p { font-size: 15px; margin: 0; }
+
+/* ── Toast ─────────────────────────────────────────────────────────────── */
+.halo-toast {
+  position: fixed; left: 50%; bottom: 32px; z-index: 900;
+  transform: translate(-50%, 16px); opacity: 0; pointer-events: none;
+  background: rgba(18,19,24,.96); border: 1px solid var(--line); color: var(--text);
+  font-size: 14px; font-weight: 600; padding: 12px 20px; border-radius: 999px;
+  box-shadow: 0 12px 32px -10px rgba(0,0,0,.7), 0 0 0 1px rgba(47,134,255,.15);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  transition: opacity .25s var(--ease, ease), transform .25s var(--ease, ease);
+  max-width: min(90vw, 360px); text-align: center; white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.halo-toast--show { opacity: 1; transform: translate(-50%, 0); }
+html.compact .halo-toast { bottom: 84px; font-size: 13px; padding: 11px 18px; }
+@media (prefers-reduced-motion: reduce) { .halo-toast { transition: opacity .15s; } }
 .search-results { display: flex; flex-direction: column; gap: 40px; }
 .search-section { }
 .search-section-title { font-size: clamp(19px, 1.5vw, 24px); font-weight: 700; margin: 0 0 20px; }

@@ -605,6 +605,25 @@ function PortraitCard({ item, onOpen }) {
 }
 
 
+/* ── Toast — brief bottom-of-screen confirmation ("Link copied!" etc.) ───── */
+let _toastTimer = null;
+function showToast(message, opts = {}) {
+  let el = document.getElementById('halo-toast');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'halo-toast';
+    el.className = 'halo-toast';
+    document.body.appendChild(el);
+  }
+  el.textContent = message;
+  el.classList.remove('halo-toast--show');
+  // Force reflow so re-triggering the same message still re-animates.
+  void el.offsetWidth;
+  el.classList.add('halo-toast--show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('halo-toast--show'), opts.duration || 2400);
+}
+
 /* ── Exports ─────────────────────────────────────────────────────────────── */
 Object.assign(window, {
   Icon, useSheen,
@@ -616,4 +635,5 @@ Object.assign(window, {
   Row,
   PageSpinner, AmbientBg,
   useBreakpoint, useViewport,
+  showToast,
 });
