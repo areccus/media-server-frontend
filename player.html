@@ -1250,7 +1250,7 @@ vid.addEventListener('error', async () => {
     document.getElementById('load-msg').textContent = 'Preparing stream…';
     document.getElementById('load-sub').textContent = 'Fixing playback for this device';
     const sep = vid.src.includes('?') ? '&' : '?';
-    loadStream(vid.src + sep + 'force_passthrough=1', '', _posBeforeRetry, _knownDuration || 0);
+    loadStream(vid.src + sep + 'force_passthrough=1', '', _posBeforeRetry, _knownDuration || 0, _lastStreamFormat);
     return;
   }
 
@@ -1286,7 +1286,7 @@ vid.addEventListener('error', async () => {
       const res  = await fetch(`${API}/stream/${mediaType}/${mediaId}?${qs}`);
       const data = await res.json();
       if (data.success && data.data?.stream_url) {
-        loadStream(data.data.stream_url, data.data.filename || '', _positionBeforeRetry, data.data.duration || 0);
+        loadStream(data.data.stream_url, data.data.filename || '', _positionBeforeRetry, data.data.duration || 0, data.data.stream_format);
         return;
       }
     } catch (_) {}
@@ -1316,6 +1316,7 @@ let activeHls = null;
 let _slowHint = null;
 let _resumeAt = 0; // seconds to seek after video metadata loads
 let _knownDuration = 0; // real duration from ffprobe (overrides vid.duration for fMP4 streams)
+let _lastStreamFormat = ''; // 'hls' | 'mp4' from the backend — see loadStream()'s isHLS check
 let _initMuted = true; // unmuted on first loadStream() call (needed for autoplay)
 
 // ── Episode watched tracking ───────────────────────────────────────────────
@@ -1487,7 +1488,7 @@ async function selectStream(i) {
   renderStreamList();
   const pos = isNaN(vid.currentTime) ? 0 : vid.currentTime;
   if (activeHls) { activeHls.destroy(); activeHls = null; }
-  loadStream(s.stream_url, s.filename || '', pos, 0);
+  loadStream(s.stream_url, s.filename || '', pos, 0, s.stream_format);
 }
 
 function _armProgressiveStallWatch(srcUrl, filename) {
@@ -1677,7 +1678,10 @@ function toggleCC() {
 }
 
 // ── HLS.js / native loader ────────────────────────────────────────────────
-function loadStream(url, filename, resumeAt, duration) {
+function loadStream(url, filename, resumeAt, duration, streamFormat) {
+  // Remember the last known format so a same-stream retry (force_passthrough)
+  // doesn't lose it when it doesn't pass one explicitly.
+  if (streamFormat) _lastStreamFormat = streamFormat;
   if (duration > 0) _knownDuration = duration;
   // Unmute on first real stream load — video starts muted (for autoplay unlock)
   // then plays with audio immediately when the src is set.
@@ -1692,7 +1696,15 @@ function loadStream(url, filename, resumeAt, duration) {
 
   // force_hls=1: backend routes Dolby/DTS audio through an AAC HLS transcode
   // for browsers — treat it as HLS so hls.js (not the native <video>) loads it.
-  const isHLS = url.includes('.m3u8') || url.includes('force_hls=1');
+  // The backend's own stream_format is checked first: a container that needs
+  // transcoding (MKV/AVI/unknown) on an Apple device always ends up HLS via a
+  // same-origin redirect chain (/api/stream/proxy → /api/stream/hls/.../
+  // index.m3u8) that never puts ".m3u8" in the URL we're given here, so the
+  // string check alone misses it — that misclassification took the
+  // "progressive MP4" code path (wrong stall-recovery strategy, no native-HLS
+  // handling) for content that was genuinely HLS the whole time.
+  const isHLS = streamFormat === 'hls' || _lastStreamFormat === 'hls' ||
+    url.includes('.m3u8') || url.includes('force_hls=1');
 
   let srcUrl;
   if (url.includes('/api/stream/proxy')) {
@@ -1947,7 +1959,7 @@ async function init() {
       }
     }
 
-    loadStream(data.data.stream_url, data.data.filename || '', resumeAt, data.data.duration || 0);
+    loadStream(data.data.stream_url, data.data.filename || '', resumeAt, data.data.duration || 0, data.data.stream_format);
     setTimeout(loadStreamList, 1500);
 
     // For non-MKV streams, seek via currentTime after metadata loads
