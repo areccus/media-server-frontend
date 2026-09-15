@@ -149,15 +149,19 @@ img { max-width: 100%; display: block; }
   background:
     /* Ambient personality on the hero itself — the poster image is a fully
        opaque <img>, so .ambient behind it has nothing to bleed through
-       until a viewer scrolls past the hero. This puts a soft wash of the
-       same --glow color each hero item already sets (see app.jsx) into the
-       scrim's top-right corner, which is otherwise fully transparent (raw
-       photo). Plain radial-gradient, not a blend mode + filter combo —
-       those have real WebKit-only compositing bugs (see .ambient's
-       z-index comment below) and this doesn't need either. Sits well
-       above the title/meta/button zone at the bottom, which keeps every
-       WCAG contrast measurement already made on that zone unaffected. */
-    radial-gradient(65% 55% at 82% 8%, color-mix(in srgb, var(--glow, #2f86ff) 32%, transparent) 0%, transparent 70%),
+       until a viewer scrolls past the hero. These two washes put real,
+       visible color into the scrim's upper half, which is otherwise fully
+       transparent (raw photo): a big one in --glow (the same accent each
+       hero item already sets, see app.jsx) top-right, and a fixed violet
+       one top-left echoing .ambient's own aurora blobs, so the hero reads
+       as part of the same ambient system instead of a subtler hint of it.
+       Plain radial-gradients, not a blend mode + filter combo — those have
+       real WebKit-only compositing bugs (see .ambient's z-index comment
+       below) and this doesn't need either. Both stay clear of the
+       title/meta/button zone at the bottom, which keeps every WCAG
+       contrast measurement already made on that zone unaffected. */
+    radial-gradient(80% 62% at 84% 4%, color-mix(in srgb, var(--glow, #2f86ff) 65%, transparent) 0%, transparent 78%),
+    radial-gradient(60% 48% at 8% 2%, rgba(130,90,220,.55) 0%, transparent 75%),
     linear-gradient(90deg, rgba(8,9,11,.92) 0%, rgba(8,9,11,.62) 32%, rgba(8,9,11,.10) 62%, rgba(8,9,11,0) 100%),
     linear-gradient(0deg, var(--bg) 1%, rgba(10,11,13,.55) 26%, rgba(10,11,13,0) 56%);
 }
@@ -489,7 +493,8 @@ html.compact {
   .stage__bg img { object-fit: cover; object-position: center center; }
   .stage__scrim {
     background:
-      radial-gradient(90% 45% at 72% 4%, color-mix(in srgb, var(--glow, #2f86ff) 30%, transparent) 0%, transparent 68%),
+      radial-gradient(100% 46% at 74% 2%, color-mix(in srgb, var(--glow, #2f86ff) 62%, transparent) 0%, transparent 76%),
+      radial-gradient(75% 36% at 4% 0%, rgba(130,90,220,.5) 0%, transparent 78%),
       linear-gradient(0deg, var(--bg) 2%, rgba(10,11,13,.45) 40%, rgba(10,11,13,0) 78%),
       linear-gradient(90deg, rgba(8,9,11,.55), rgba(8,9,11,.1));
   }
