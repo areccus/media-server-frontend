@@ -4610,8 +4610,16 @@ function App() {
               : route.page === 'sport' ? <SportDetailPage gameId={route.params.gameId}/>
               : null}
           </main>
-          <BottomBar active={mobileScreen} onNav={handleMobileNav}/>
         </div>
+        {/* BottomBar is position:fixed — must live outside .app, which sets
+            overflow:hidden + isolation:isolate. Those don't spec-legally
+            change position:fixed's containing block, but real-world mobile
+            Safari has long-standing bugs where a fixed descendant of an
+            overflow-clipped/isolated ancestor detaches from the viewport
+            and appears to scroll with the page instead, landing wherever
+            mid-scroll. BackToTopButton already lived outside .app for the
+            same reason; BottomBar never got the same treatment. */}
+        <BottomBar key="bottombar" active={mobileScreen} onNav={handleMobileNav}/>
         <BackToTopButton key="backtotop"/>
         <TweaksPanel key="tweaks">
           <TweakSection label="Style"/>
@@ -4673,10 +4681,13 @@ function App() {
             </React.Fragment>
           )}
         </div>
-        <BottomBar active={mobileScreen} onNav={handleMobileNav}/>
       </div>
-      <BackToTopButton/>
-      <TweaksPanel>
+      {/* Outside .app for the same reason as the router-pages branch —
+          see the comment there. Keys match across both branches so React
+          doesn't reuse a DOM node across a home <-> other-page switch. */}
+      <BottomBar key="bottombar" active={mobileScreen} onNav={handleMobileNav}/>
+      <BackToTopButton key="backtotop"/>
+      <TweaksPanel key="tweaks">
         <TweakSection label="Style"/>
         <TweakSlider label="Glow intensity" value={t.glowStrength} min={0} max={2} step={0.05}
           onChange={v => setTweak('glowStrength', v)}/>
