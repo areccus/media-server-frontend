@@ -724,16 +724,21 @@ html.compact .episode-still { width: 110px; }
 .detail-player__close { background: var(--line); border: 1px solid rgba(255,255,255,.15); border-radius: 50%; width: 40px; height: 40px; display: grid; place-items: center; cursor: pointer; color: #fff; transition: background .15s; }
 .detail-player__close:hover { background: rgba(255,255,255,.2); }
 .detail-player__iframe { width: 100%; height: 100%; border: none; }
-.back-button { display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,.06); border: 1px solid var(--line); border-radius: 8px; padding: 8px 16px; font: inherit; font-size: 14px; color: var(--muted); cursor: pointer; transition: .15s; margin-top: 24px; }
+.back-button {
+  display: inline-flex; align-items: center; gap: 8px; background: rgba(255,255,255,.06);
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 16px; font: inherit;
+  font-size: 14px; color: var(--muted); cursor: pointer; transition: .15s; margin-top: 24px;
+  /* iOS/Android's native tap-highlight is a separate overlay from CSS
+     outline/box-shadow — this is what was still showing a blue tint on tap
+     even with outline:none set below. */
+  -webkit-tap-highlight-color: transparent;
+}
 .back-button:hover { background: var(--line); color: var(--text); }
 .back-button svg { width: 16px; height: 16px; }
-/* Custom focus treatment instead of the browser's default blue outline —
-   keyboard-only (:focus-visible) so mouse/touch clicks stay clean. */
-.back-button:focus { outline: none; }
-.back-button:focus-visible {
-  outline: none; background: var(--line); color: var(--text); border-color: rgba(47,134,255,.5);
-  box-shadow: 0 0 0 2px rgba(47,134,255,.5), 0 0 18px rgba(47,134,255,.35);
-}
+/* No focus ring at all, as requested — Safari treats a tap on a <button> as
+   :focus-visible far more readily than Chrome does, so a colored
+   :focus-visible replacement still read as "stuck focused" on tap. */
+.back-button:focus, .back-button:focus-visible { outline: none; box-shadow: none; }
 
 /* ── Search / Library / History / Genre pages ────────────────────────────── */
 .search-page { padding: 0 var(--gutter) 80px; }

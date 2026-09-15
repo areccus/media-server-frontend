@@ -88,10 +88,15 @@
     }
   };
 
-  // Reset focus on route change
+  // Reset focus on route change. Deliberately NOT calling ensureFocus() here —
+  // move() and the 'select' handler already call it lazily right when a
+  // directional/remote input actually happens, which is the only time a
+  // visible focus ring is wanted. Eagerly applying it on every route change
+  // used to visibly stamp a glowing ring onto the first focusable element
+  // (almost always a page's "Back" button) on ordinary touch/mouse devices
+  // that never asked for TV-remote-style navigation at all.
   window.addEventListener('hashchange', () => {
     current = null;
-    setTimeout(ensureFocus, 150);
   });
 
   // Sync focus when user clicks/taps normally
