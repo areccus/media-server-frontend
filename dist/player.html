@@ -1488,7 +1488,12 @@ async function selectStream(i) {
   renderStreamList();
   const pos = isNaN(vid.currentTime) ? 0 : vid.currentTime;
   if (activeHls) { activeHls.destroy(); activeHls = null; }
-  loadStream(s.stream_url, s.filename || '', pos, 0, s.stream_format);
+  // The stream-list endpoint doesn't return a per-candidate duration, but an
+  // alternate source is still the SAME title — passing 0 here would blank
+  // out the runtime display we already know, for no reason. loadStream only
+  // overwrites _knownDuration when its duration arg is > 0, so passing the
+  // one we already have just keeps it as-is.
+  loadStream(s.stream_url, s.filename || '', pos, _knownDuration || 0, s.stream_format);
 }
 
 function _armProgressiveStallWatch(srcUrl, filename) {
@@ -1682,7 +1687,16 @@ function loadStream(url, filename, resumeAt, duration, streamFormat) {
   // Remember the last known format so a same-stream retry (force_passthrough)
   // doesn't lose it when it doesn't pass one explicitly.
   if (streamFormat) _lastStreamFormat = streamFormat;
-  if (duration > 0) _knownDuration = duration;
+  if (duration > 0) {
+    _knownDuration = duration;
+    // timeDurEl otherwise only gets set inside the timeupdate handler below,
+    // which doesn't fire until playback actually starts progressing — on a
+    // slower connection (this was reported specifically on cellular/iPhone)
+    // that first tick can lag well behind when we already know the real
+    // duration, so the runtime sits blank/"buffering" the whole time
+    // regardless of how quickly the backend answered.
+    timeDurEl.textContent = fmt(duration);
+  }
   // Unmute on first real stream load — video starts muted (for autoplay unlock)
   // then plays with audio immediately when the src is set.
   if (_initMuted) { vid.muted = false; _initMuted = false; }
