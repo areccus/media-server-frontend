@@ -415,7 +415,13 @@ function DetailPage({ mediaType, mediaId }) {
                 className="btn btn--primary btn--large"
                 onClick={() => {
                   if ((mediaType === 'tv' || mediaType === 'anime') && item.seasons && item.seasons.length > 0) {
-                    playEpisode(1, 1);
+                    // Resume the exact episode the saved progress belongs to —
+                    // this used to be hardcoded to S1E1 regardless of where the
+                    // viewer actually left off. Falls back to the first episode
+                    // of the selected season for a fresh "Play" with no progress.
+                    const s = progressData?.season > 0 ? progressData.season : selectedSeason;
+                    const e = progressData?.season > 0 ? progressData.episode : (episodes[0]?.episode_number || 1);
+                    playEpisode(s, e);
                   } else {
                     const posterP   = encodeURIComponent(item.poster   || '');
                     const backdropP = encodeURIComponent(item.backdrop || '');
@@ -440,7 +446,11 @@ function DetailPage({ mediaType, mediaId }) {
                   className="btn btn--glass btn--large"
                   onClick={() => {
                     if ((mediaType === 'tv' || mediaType === 'anime') && item.seasons && item.seasons.length > 0) {
-                      playEpisode(1, 1, true);
+                      // Start over from the first episode of whichever season is
+                      // currently selected in the UI, not hardcoded to S1E1 —
+                      // matches how the Apple TV app's "Play from Start" works.
+                      const e = episodes[0]?.episode_number || 1;
+                      playEpisode(selectedSeason, e, true);
                     } else {
                       const posterP   = encodeURIComponent(item.poster   || '');
                       const backdropP = encodeURIComponent(item.backdrop || '');
