@@ -1488,12 +1488,28 @@ async function selectStream(i) {
   renderStreamList();
   const pos = isNaN(vid.currentTime) ? 0 : vid.currentTime;
   if (activeHls) { activeHls.destroy(); activeHls = null; }
-  // The stream-list endpoint doesn't return a per-candidate duration, but an
-  // alternate source is still the SAME title — passing 0 here would blank
-  // out the runtime display we already know, for no reason. loadStream only
-  // overwrites _knownDuration when its duration arg is > 0, so passing the
-  // one we already have just keeps it as-is.
-  loadStream(s.stream_url, s.filename || '', pos, _knownDuration || 0, s.stream_format);
+  // The stream-list endpoint doesn't return a per-candidate duration (probing
+  // every listed candidate up front would slow down just opening the picker),
+  // so ask for the real one only for the specific candidate just picked —
+  // a different release can genuinely run a few seconds longer or shorter,
+  // and showing the PREVIOUS stream's duration for it reads as visibly wrong
+  // rather than just briefly unknown. Falls back to 0 (not the old value) on
+  // failure, so a bad probe can't leave a stale number on screen either.
+  let freshDuration = 0;
+  try {
+    const rawUrl = new URL(s.stream_url).searchParams.get('url');
+    if (rawUrl) {
+      const dr = await fetch(`${API}/stream/probe-duration?url=${encodeURIComponent(rawUrl)}`);
+      const dd = await dr.json();
+      if (dd.success && dd.duration > 0) freshDuration = dd.duration;
+    }
+  } catch (_) {}
+  // loadStream only ever SETS _knownDuration (duration > 0 guard) — explicitly
+  // clear the old stream's value here so a failed probe falls back to
+  // "unknown, resolves naturally from the video" instead of silently keeping
+  // whatever the previous, now-wrong source's duration was.
+  _knownDuration = 0;
+  loadStream(s.stream_url, s.filename || '', pos, freshDuration, s.stream_format);
 }
 
 function _armProgressiveStallWatch(srcUrl, filename) {
@@ -1696,6 +1712,14 @@ function loadStream(url, filename, resumeAt, duration, streamFormat) {
     // duration, so the runtime sits blank/"buffering" the whole time
     // regardless of how quickly the backend answered.
     timeDurEl.textContent = fmt(duration);
+  } else {
+    // No fresh duration this time (e.g. a source switch whose probe failed,
+    // or just hasn't been fetched yet) — clear the text too, not just
+    // _knownDuration. Leaving the PREVIOUS stream's number on screen reads as
+    // a confident, wrong answer for whatever's actually loaded now; blank
+    // until the timeupdate handler picks up the new video's own duration is
+    // honest about what's actually known at this moment.
+    timeDurEl.textContent = '--:--';
   }
   // Unmute on first real stream load — video starts muted (for autoplay unlock)
   // then plays with audio immediately when the src is set.
