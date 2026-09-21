@@ -1805,10 +1805,24 @@ function loadStream(url, filename, resumeAt, duration, streamFormat) {
     // iOS Safari native HLS — no hls.js, so we add our own stall/error recovery.
     vid.src = srcUrl;
     let _nativeHlsRecoveryTimer = null;
+    // Capped, with a visible failure at the end — this used to retry forever
+    // on every waiting/stalled event with no limit and a silent empty catch,
+    // so a source that genuinely can't recover (backend down, dead link) just
+    // left the viewer staring at an infinite spinner with zero indication
+    // anything was wrong or any way to act on it. 4 attempts (~doubling from
+    // 8s) gives a real backend restart room to come back up before giving up.
+    const _MAX_NATIVE_HLS_RECOVERIES = 4;
+    let _nativeHlsRecoveryAttempts = 0;
     function _scheduleNativeHlsRecovery() {
       clearTimeout(_nativeHlsRecoveryTimer);
       _nativeHlsRecoveryTimer = setTimeout(async () => {
         if (vid.paused || vid.ended) return;
+        if (_nativeHlsRecoveryAttempts >= _MAX_NATIVE_HLS_RECOVERIES) {
+          console.warn(`Native HLS recovery: gave up after ${_nativeHlsRecoveryAttempts} attempts`);
+          showError('Playback stalled and could not recover.\n\nTry a different source, or try again in a moment.');
+          return;
+        }
+        _nativeHlsRecoveryAttempts++;
         const pos = vid.currentTime;
         try {
           const qs2 = new URLSearchParams();
@@ -1820,13 +1834,20 @@ function loadStream(url, filename, resumeAt, duration, streamFormat) {
             const fresh = data.data.stream_url + (pos > 4 ? `&t=${Math.floor(pos)}` : '');
             vid.src = fresh;
             vid.play().catch(() => {});
+          } else {
+            console.warn(`Native HLS recovery attempt ${_nativeHlsRecoveryAttempts}: no stream_url in response`);
           }
-        } catch (_) {}
+        } catch (err) {
+          console.warn(`Native HLS recovery attempt ${_nativeHlsRecoveryAttempts} failed:`, err);
+        }
       }, 8000);
     }
     vid.addEventListener('waiting', _scheduleNativeHlsRecovery);
     vid.addEventListener('stalled', _scheduleNativeHlsRecovery);
-    vid.addEventListener('playing', () => clearTimeout(_nativeHlsRecoveryTimer));
+    vid.addEventListener('playing', () => {
+      clearTimeout(_nativeHlsRecoveryTimer);
+      _nativeHlsRecoveryAttempts = 0;   // genuine recovery — reset the budget
+    });
     vid.play().catch(() => {});
   } else if (!isHLS) {
     // Progressive MP4/MKV — load directly and arm stall recovery
